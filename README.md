@@ -89,6 +89,22 @@ export QJ_API_KEY="..."
 
 API key auth is preferred for CLI runs. Email/password auth also works; if the auth service returns an active-session conflict, the launcher retries with `replace_existing_session=true` by default. Set `QJ_REPLACE_EXISTING_SESSION=0` if you do not want a CLI run to replace an existing web session.
 
+## Data Granularity
+
+`Backtester(..., granularity="1d")` remains the default. For yfinance-backed `/bt/prepare` data you can request historical intraday bars with values such as `1m`, `5m`, `15m`, `30m`, or `1h`; numeric aliases like `granularity=5` are normalized to `5m`.
+
+```python
+strategy = MyStrategy(
+    api_key="...",
+    instruments=["AAPL", "MSFT"],
+    backtest_period={"start": "2026-06-01", "end": "2026-06-05"},
+    source="yfinance",
+    granularity="5m",
+)
+```
+
+Intraday availability depends on yfinance history coverage for the requested symbols and dates.
+
 The real backtest path fetches market data through QuantJourney credentials. The public/light report writes a text summary, `summary.json`, `metrics.csv`, `equity_curve.csv`, `equity_curve.png`, `dashboard.html`, a selected native QuantJourney chart pack under `plots/`, and `run_metadata.json`. Full `portfolio_data.pkl`, `instruments_data.pkl`, and `blotter.pkl` debug archives are disabled by default; set `QJ_SAVE_PICKLE_ARCHIVE=1` only when you explicitly want local audit pickles. Full PDF packets, narrative generation, walk-forward validation, optimization and deeper institutional diagnostics are QuantJourney Backtester Pro/SaaS features.
 
 Use `--no-reports` when you only want calculation and archive output:

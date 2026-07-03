@@ -75,6 +75,53 @@ class PortfolioState:
     cash: float = 0.0
 
 
+SUPPORTED_GRANULARITIES = {
+    "1m",
+    "2m",
+    "5m",
+    "15m",
+    "30m",
+    "90m",
+    "1h",
+    "1d",
+    "5d",
+    "1wk",
+    "1mo",
+    "3mo",
+}
+
+
+def _normalize_granularity(granularity: Any) -> str:
+    raw = str(granularity or "1d").strip().lower()
+    if raw.isdigit():
+        raw = f"{raw}m"
+    aliases = {
+        "1min": "1m",
+        "2min": "2m",
+        "5min": "5m",
+        "15min": "15m",
+        "30min": "30m",
+        "60m": "1h",
+        "60min": "1h",
+        "1hour": "1h",
+        "1hr": "1h",
+        "d": "1d",
+        "day": "1d",
+        "daily": "1d",
+        "w": "1wk",
+        "week": "1wk",
+        "weekly": "1wk",
+        "m": "1mo",
+        "month": "1mo",
+        "monthly": "1mo",
+    }
+    value = aliases.get(raw, raw)
+    if value not in SUPPORTED_GRANULARITIES:
+        supported = ", ".join(sorted(SUPPORTED_GRANULARITIES))
+        raise ValueError(f"Unsupported granularity={granularity!r}. Use one of: {supported}.")
+    return value
+
+
 # ─────────────────────────────────────────────────────────────────────
 # Helpers: reconstruct DataFrames from FramePayload JSON
 # ─────────────────────────────────────────────────────────────────────
@@ -232,7 +279,7 @@ class Backtester(SDKClientMixin, ReportingMixin):
 
         # ── Provider ──
         self._source = source
-        self._granularity = granularity
+        self._granularity = _normalize_granularity(granularity)
         self._persist = persist
         self._dedupe = dedupe
         self._force_refresh = force_refresh

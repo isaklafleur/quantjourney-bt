@@ -83,6 +83,49 @@ def test_backtester_public_imports() -> None:
     assert RebalancePolicy(frequency="D").frequency == "D"
 
 
+def test_backtester_granularity_config_supports_intraday_aliases() -> None:
+    from backtester.core import _normalize_granularity
+
+    assert _normalize_granularity("1d") == "1d"
+    assert _normalize_granularity("5m") == "5m"
+    assert _normalize_granularity(5) == "5m"
+    assert _normalize_granularity("15min") == "15m"
+    assert _normalize_granularity("60m") == "1h"
+
+
+def test_sdk_prepare_payload_uses_normalized_granularity() -> None:
+    from types import SimpleNamespace
+
+    from backtester.core import _normalize_granularity
+    from backtester.mixins.sdk_client import SDKClientMixin
+
+    captured: dict = {}
+
+    class DummyClient:
+        async def _request(self, path: str, payload: dict) -> dict:
+            captured["path"] = path
+            captured["payload"] = payload
+            return {"session_id": "s1", "dataset_id": "d1", "summary": {}}
+
+    class DummyBacktester(SDKClientMixin):
+        async def _get_sdk_client(self):
+            return DummyClient()
+
+    dummy = DummyBacktester()
+    dummy._source = "yfinance"
+    dummy._granularity = _normalize_granularity(5)
+    dummy.backtest_period = SimpleNamespace(start="2026-06-01", end="2026-06-05")
+    dummy.instruments = ["AAPL"]
+    dummy._persist = True
+    dummy._dedupe = True
+    dummy._force_refresh = False
+
+    asyncio.run(dummy._fetch_market_data())
+
+    assert captured["path"] == "/bt/prepare"
+    assert captured["payload"]["provider"]["granularity"] == "5m"
+
+
 def test_auth_active_session_conflict_is_detected(monkeypatch) -> None:
     from backtester.mixins.sdk_client import SDKClientMixin
 
