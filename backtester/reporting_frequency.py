@@ -200,7 +200,9 @@ def resample_return_series(
         return r
     nav = (1.0 + r).cumprod()
     sampled = nav.resample(config.pandas_freq).last().dropna()
-    out = sampled.pct_change().fillna(0.0)
+    out = sampled.pct_change()
+    if not sampled.empty:
+        out.iloc[0] = sampled.iloc[0] - 1.0
     out.name = returns.name
     return out
 

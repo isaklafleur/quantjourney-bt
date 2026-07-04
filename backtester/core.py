@@ -46,6 +46,7 @@ from dataclasses import dataclass, field
 from backtester.version import __version__ as BACKTESTER_VERSION
 from backtester.mixins.reporting import ReportingMixin
 from backtester.mixins.sdk_client import SDKClientMixin
+from backtester.execution.contract_spec import ContractSpec, get_contract_spec
 
 # ---------------------------------------------------------------------------
 # Lightweight logger — avoid importing quantjourney.logger which may pull
@@ -206,7 +207,7 @@ class Backtester(SDKClientMixin, ReportingMixin):
         - implement _compute_weights() -> pd.DataFrame
         - implement _compute_positions() (can be a no-op)
 
-    Performance computation, reporting and run metadata are handled by the base class.
+    All performance computation, reporting, and archiving works as before.
     """
 
     def __init__(
@@ -227,6 +228,7 @@ class Backtester(SDKClientMixin, ReportingMixin):
         initial_capital: float = 100_000.0,
         instruments: Optional[List[str]] = None,
         backtest_period: Optional[Dict[str, str]] = None,
+        target_volatility: float = 0.15,
         max_position_size: float = 0.10,
         indicators_config: Optional[List[Dict[str, Any]]] = None,
         # ── Reporting ──
@@ -239,6 +241,7 @@ class Backtester(SDKClientMixin, ReportingMixin):
         show_portfolio_plots: bool = False,
         save_instrument_plots: bool = False,
         show_instrument_plots: bool = False,
+        save_pdf_report: bool = False,
         reporting_frequency: str = "daily",
         # ── BT API options ──
         persist: bool = True,
@@ -252,10 +255,13 @@ class Backtester(SDKClientMixin, ReportingMixin):
         slippage_model=None,               # SlippageModel instance
         commission_scheme=None,            # CommissionScheme instance
         weight_cost_model=None,            # WeightCostModel instance for weight-mode implied trades
+        contract_specs: Optional[Dict[str, ContractSpec]] = None,
         fill_at: str = "open",             # order-mode market fill convention
         max_volume_participation: Optional[float] = None,  # order-mode volume cap
         # ── Rebalancing ──
         rebalance_policy=None,             # RebalancePolicy instance (default: daily)
+        # ── Risk model ──
+        risk_model=None,                   # RiskModel instance (applied between weights and rebalance)
         # ── Performance flags ──
         skip_analysis: bool = False,       # skip StrategyPerformanceAnalysis (saves ~800ms)
         lite_init: bool = False,           # skip throwaway validation/metrics in data init (saves ~600ms)
@@ -298,13 +304,14 @@ class Backtester(SDKClientMixin, ReportingMixin):
             start=backtest_period["start"],
             end=backtest_period["end"],
         )
+        self.target_volatility = float(target_volatility)
         self.max_position_size = float(max_position_size)
         self.indicators_config = indicators_config or []
 
         # ── Reporting ──
         self._reports_directory = os.environ.get("QJ_OUTPUT_DIR", reports_directory)
         self._plots_directory = plots_directory
-        self._theme_plots = theme_plots
+        self._theme_plots = os.environ.get("QJ_PLOT_THEME", theme_plots)
         self._plot_dpi = _env_int("QJ_PLOT_DPI", 300)
         self._benchmark = {
             "symbol": benchmark_symbol,
@@ -323,6 +330,7 @@ class Backtester(SDKClientMixin, ReportingMixin):
             save_text_reports = False
             save_portfolio_plots = False
             save_instrument_plots = False
+            save_pdf_report = False
             skip_analysis = True
         self._show_text_reports = show_text_reports
         self._save_text_reports = save_text_reports
@@ -330,6 +338,7 @@ class Backtester(SDKClientMixin, ReportingMixin):
         self._show_portfolio_plots = show_portfolio_plots
         self._save_instrument_plots = save_instrument_plots
         self._show_instrument_plots = show_instrument_plots
+        self._save_pdf_report = save_pdf_report
         self._reporting_frequency = os.environ.get(
             "QJ_REPORTING_FREQUENCY",
             reporting_frequency,
@@ -359,6 +368,10 @@ class Backtester(SDKClientMixin, ReportingMixin):
 
         # ── Execution mode ──
         self.execution_mode = execution_mode  # "weights" or "orders"
+        self.contract_specs = {
+            str(symbol).upper(): spec
+            for symbol, spec in (contract_specs or {}).items()
+        }
         self.fill_engine = None
         if execution_mode == "orders":
             from backtester.execution import FillEngine
@@ -379,6 +392,9 @@ class Backtester(SDKClientMixin, ReportingMixin):
         # ── Rebalancing ──
         from backtester.portfolio.rebalance import RebalancePolicy
         self._rebalance_policy = rebalance_policy if rebalance_policy is not None else RebalancePolicy()
+
+        # ── Risk model ──
+        self._risk_model = risk_model  # None = no adjustment
 
         # ── Universe (lazy-initialized on first access) ──
         self._universe = None
@@ -1056,6 +1072,42 @@ class Backtester(SDKClientMixin, ReportingMixin):
         if weights is not None and not weights.empty:
             self.instruments_data.add_strategy_data(self.strategy_name, "weights", weights)
 
+    def _apply_risk_model(self) -> None:
+        """Apply pluggable risk model to adjust weights before rebalance.
+
+        Pipeline: signals → weights → **risk_model.adjust()** → rebalance → execution
+
+        If no risk_model is set, this is a no-op.
+        """
+        if self._risk_model is None:
+            return
+
+        weights = self.instruments_data.get_feature(
+            "strategies", self.strategy_name, "weights"
+        )
+        if weights is None or weights.empty:
+            return
+
+        close = self.instruments_data.get_feature("adj_close")
+        returns = close.pct_change().fillna(0.0)
+
+        adjusted = self._risk_model.adjust(weights, returns)
+
+        # Overwrite weights with risk-adjusted version
+        # Drop existing weight columns first (add_strategy_data appends, not replaces)
+        strats = self.instruments_data.strategies
+        if not strats.empty:
+            keep_mask = ~(
+                (strats.columns.get_level_values(0) == self.strategy_name)
+                & (strats.columns.get_level_values(1) == "weights")
+            )
+            self.instruments_data.strategies = strats.loc[:, keep_mask]
+
+        self.instruments_data.add_strategy_data(
+            self.strategy_name, "weights", adjusted
+        )
+        logger.info(f"[Risk] Applied {self._risk_model} to weights")
+
     def _generate_positions(self) -> None:
         """Generate and validate strategy positions."""
         positions = self._compute_positions()
@@ -1084,7 +1136,19 @@ class Backtester(SDKClientMixin, ReportingMixin):
         """
         from backtester.execution.order_types import BarData, OrderSide
 
-        close_prices = self.instruments_data.get_feature("adj_close")
+        def _is_valid_price(value: Any) -> bool:
+            try:
+                return bool(pd.notna(value) and np.isfinite(float(value)) and float(value) > 0.0)
+            except Exception:
+                return False
+
+        def _is_valid_bar(bar: BarData) -> bool:
+            return all(
+                _is_valid_price(value)
+                for value in (bar.open, bar.high, bar.low, bar.close)
+            )
+
+        close_prices = self._instrument_price_frame("close", fallback="adj_close")
         instruments = close_prices.columns.tolist()
         all_dates = close_prices.index
 
@@ -1112,11 +1176,15 @@ class Backtester(SDKClientMixin, ReportingMixin):
         cash = float(self.initial_capital)
         current_pos = {inst: 0.0 for inst in instruments}
         avg_entry_price: Dict[str, Optional[float]] = {inst: None for inst in instruments}
+        last_valid_price: Dict[str, Optional[float]] = {inst: None for inst in instruments}
 
         for i, date in enumerate(all_dates):
             # 1) Build BarData for each instrument
             bars: Dict[str, BarData] = {}
             for inst in instruments:
+                close_value = close_prices.loc[date, inst]
+                if _is_valid_price(close_value):
+                    last_valid_price[inst] = float(close_value)
                 bars[inst] = BarData(
                     timestamp=date,
                     open=float(open_prices.loc[date, inst]),
@@ -1128,6 +1196,8 @@ class Backtester(SDKClientMixin, ReportingMixin):
 
             # 2) Process pending orders against this bar
             for inst in instruments:
+                if not _is_valid_bar(bars[inst]):
+                    continue
                 fills = self.fill_engine.process_bar(inst, bars[inst])
                 if fills and self.blotter is None:
                     from backtester.engines.blotter import Blotter
@@ -1142,7 +1212,7 @@ class Backtester(SDKClientMixin, ReportingMixin):
                         signed_fill_qty=qty,
                         fill_price=float(fill.fill_price),
                     )
-                    cost = fill.fill_price * fill.quantity
+                    cost = self._trade_notional(fill.instrument, fill.quantity, fill.fill_price)
                     if fill.side == OrderSide.BUY:
                         cash -= cost + fill.commission
                     else:
@@ -1153,16 +1223,35 @@ class Backtester(SDKClientMixin, ReportingMixin):
                         side=fill.side.value,
                         quantity=float(fill.quantity),
                         price=float(fill.fill_price),
-                        trade_value=float(abs(fill.fill_price * fill.quantity)),
+                        trade_value=float(cost),
                         timestamp=fill.timestamp,
                         transaction_cost=float(fill.commission),
+                        slippage=float(fill.slippage),
+                        theoretical_price=(
+                            None
+                            if fill.theoretical_price is None
+                            else float(fill.theoretical_price)
+                        ),
+                        fill_status=fill.order_status.value,
                     )
 
             # 3) Compute NAV
-            position_value = sum(
-                current_pos[inst] * float(close_prices.loc[date, inst])
-                for inst in instruments
-            )
+            position_value = 0.0
+            position_values = {}
+            for inst in instruments:
+                qty = float(current_pos.get(inst, 0.0))
+                if abs(qty) <= 1e-12:
+                    position_values[inst] = 0.0
+                    continue
+                price = close_prices.loc[date, inst]
+                if not _is_valid_price(price):
+                    price = last_valid_price.get(inst) or avg_entry_price.get(inst)
+                if _is_valid_price(price):
+                    value = self._signed_position_value(inst, qty, float(price))
+                    position_values[inst] = value
+                    position_value += value
+                else:
+                    position_values[inst] = 0.0
             nav_series.iloc[i] = cash + position_value
 
             # 4) Let strategy submit new orders for next bar
@@ -1196,13 +1285,48 @@ class Backtester(SDKClientMixin, ReportingMixin):
         self._order_context = {}
         self.portfolio_data.update_net_asset_value(nav_series)
         self.portfolio_data.update_positions(positions_df)
-        self.portfolio_data.update_weights(
-            positions_df.multiply(close_prices).divide(nav_series, axis=0).fillna(0.0)
-        )
-        daily_returns = nav_series.pct_change().fillna(0.0)
+        position_values_df = self._position_values_from_units(positions_df, close_prices)
+        self.portfolio_data.position_values = position_values_df
+        self.portfolio_data.update_weights(position_values_df.divide(nav_series, axis=0).fillna(0.0))
+        raw_returns = nav_series.pct_change()
+        daily_returns = raw_returns.fillna(0.0)
         self.portfolio_data.returns = daily_returns
+        self.portfolio_data.returns_for_metrics = raw_returns.dropna()
         self.portfolio_data.average_entry_price = dict(avg_entry_price)
         self.portfolio_data.average_entry_price_history = avg_entry_df
+
+    def _contract_spec(self, instrument: str) -> ContractSpec:
+        key = str(instrument).upper()
+        return self.contract_specs.get(key, get_contract_spec(key))
+
+    def _trade_notional(self, instrument: str, quantity: float, price: float) -> float:
+        return self._contract_spec(instrument).notional(quantity, price)
+
+    def _signed_position_value(self, instrument: str, quantity: float, price: float) -> float:
+        spec = self._contract_spec(instrument)
+        if spec.inverse:
+            return float(np.sign(quantity) * spec.notional(quantity, price))
+        return float(quantity) * float(price) * float(spec.multiplier) * float(spec.lot_size)
+
+    def _position_values_from_units(self, positions: pd.DataFrame, prices: pd.DataFrame) -> pd.DataFrame:
+        values = pd.DataFrame(0.0, index=positions.index, columns=positions.columns)
+        for inst in positions.columns:
+            spec = self._contract_spec(inst)
+            if spec.inverse:
+                values[inst] = np.sign(positions[inst]) * positions[inst].abs().multiply(
+                    spec.multiplier / prices[inst].replace(0.0, np.nan)
+                )
+            else:
+                values[inst] = positions[inst].multiply(prices[inst]).multiply(
+                    float(spec.multiplier) * float(spec.lot_size)
+                )
+        return values.replace([np.inf, -np.inf], np.nan).fillna(0.0)
+
+    def _instrument_price_frame(self, field: str, *, fallback: str) -> pd.DataFrame:
+        try:
+            return self.instruments_data.get_feature(field)
+        except Exception:
+            return self.instruments_data.get_feature(fallback)
 
     @staticmethod
     def _updated_average_entry_price(
@@ -1420,7 +1544,7 @@ class Backtester(SDKClientMixin, ReportingMixin):
           2. Reconstruct PortfolioData
           3. Compute indicators, signals, weights
           4. Compute performance
-          5. Generate analysis + run metadata
+          5. Generate analysis + archive
         """
         total_started = time.perf_counter()
         self._timings = {}
@@ -1434,14 +1558,10 @@ class Backtester(SDKClientMixin, ReportingMixin):
         except Exception as e:
             self._timings["data_fetch_seconds"] = time.perf_counter() - stage_started
             self._timings["total_seconds"] = time.perf_counter() - total_started
-            quota_message = getattr(e, "_qj_quota_message", None)
-            if quota_message:
-                print(quota_message)
-            else:
-                logger.error(
-                    f"[Backtester] Could not fetch market data — skipping strategy.\n"
-                    f"  Error: {e}"
-                )
+            logger.error(
+                f"[Backtester] Could not fetch market data — skipping strategy.\n"
+                f"  Error: {e}"
+            )
             if self._strict_data_fetch:
                 raise
             return
@@ -1455,22 +1575,23 @@ class Backtester(SDKClientMixin, ReportingMixin):
         stage_started = time.perf_counter()
         self._generate_signals()
         self._generate_weights()
+        self._apply_risk_model()
         self._generate_positions()
 
         # Performance (dispatches to order-based or weight-based)
         self._compute_strategy_performance()
         self._timings["calculation_seconds"] = time.perf_counter() - stage_started
 
-        # Reports & Metadata
+        # Reports & Archive
         stage_started = time.perf_counter()
         if not self._skip_analysis:
             await self._generate_strategy_analysis()
         self._timings["reporting_seconds"] = time.perf_counter() - stage_started
 
-        self._timings["total_before_metadata_seconds"] = time.perf_counter() - total_started
+        self._timings["total_before_archive_seconds"] = time.perf_counter() - total_started
         stage_started = time.perf_counter()
         await self._archive_strategy_data()
-        self._timings["metadata_seconds"] = time.perf_counter() - stage_started
+        self._timings["archive_seconds"] = time.perf_counter() - stage_started
         self._timings["total_seconds"] = time.perf_counter() - total_started
 
         logger.info(
@@ -1479,7 +1600,7 @@ class Backtester(SDKClientMixin, ReportingMixin):
             f"data={self._timings.get('data_processing_seconds', 0.0):.2f}s | "
             f"calc={self._timings.get('calculation_seconds', 0.0):.2f}s | "
             f"reports={self._timings.get('reporting_seconds', 0.0):.2f}s | "
-            f"metadata={self._timings.get('metadata_seconds', 0.0):.2f}s | "
+            f"archive={self._timings.get('archive_seconds', 0.0):.2f}s | "
             f"total={self._timings.get('total_seconds', 0.0):.2f}s"
         )
         logger.info(f"═══ Cloud Strategy {self.strategy_name} completed ═══")

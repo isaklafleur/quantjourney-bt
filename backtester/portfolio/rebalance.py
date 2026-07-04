@@ -593,11 +593,26 @@ class RebalanceEngine:
                         # Positions within band keep their current (drifted) weight
                         new_w[keep_mask] = current_w[keep_mask]
                         partial_saved += int(keep_mask.sum())
-                        # Re-normalise so weights still sum to target total
+                        # Re-normalise only the traded sleeve so kept weights
+                        # remain genuinely kept. For market-neutral books,
+                        # use gross exposure rather than net sum.
                         target_total = target_w[i].sum()
-                        current_total = new_w.sum()
-                        if current_total > 1e-12 and target_total > 1e-12:
-                            new_w *= target_total / current_total
+                        traded_mask = ~keep_mask
+                        if traded_mask.any():
+                            target_traded = target_w[i][traded_mask]
+                            kept_total = new_w[keep_mask].sum()
+                            if abs(target_total) > 1e-12 and abs(target_traded.sum()) > 1e-12:
+                                new_w[traded_mask] = target_traded * (
+                                    (target_total - kept_total) / target_traded.sum()
+                                )
+                            else:
+                                target_gross = np.abs(target_w[i]).sum()
+                                kept_gross = np.abs(new_w[keep_mask]).sum()
+                                traded_gross = np.abs(target_traded).sum()
+                                if traded_gross > 1e-12:
+                                    new_w[traded_mask] = target_traded * (
+                                        max(target_gross - kept_gross, 0.0) / traded_gross
+                                    )
 
                     # ── Tax-lot avoidance heuristic ──
                     if self.policy.avoid_short_term_gains and i > 0:

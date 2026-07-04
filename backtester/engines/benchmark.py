@@ -21,6 +21,45 @@ import pandas as pd
 from backtester.utils.logger import logger
 
 
+def _select_benchmark_price(
+	df: pd.DataFrame,
+	*,
+	source: str,
+	symbol: str,
+	assume_close_adjusted: bool = False,
+) -> Optional[pd.Series]:
+	"""Prefer total-return/adjusted benchmark prices; fall back to raw close with warning."""
+	if df is None or df.empty:
+		return None
+	columns = {str(c).lower().replace(" ", "_"): c for c in df.columns}
+	for key in ("adj_close", "adjclose", "adjusted_close"):
+		if key in columns:
+			return df[columns[key]].astype(float)
+	if "close" in columns:
+		if not assume_close_adjusted:
+			logger.warning(
+				f"Benchmark {symbol} from {source} has no adjusted close; using raw close price-return series."
+			)
+		return df[columns["close"]].astype(float)
+	return None
+
+
+def _price_to_returns(price: pd.Series) -> pd.Series:
+	return price.sort_index().astype(float).pct_change().replace([np.inf, -np.inf], np.nan)
+
+
+def _align_benchmark_returns(benchmark_returns: pd.Series, returns_index: pd.DatetimeIndex) -> pd.Series:
+	aligned = benchmark_returns.reindex(returns_index)
+	missing = aligned.isna()
+	if missing.any():
+		missing_frac = float(missing.mean())
+		logger.warning(
+			f"Benchmark alignment has {missing.sum()} missing bars ({missing_frac:.1%}); "
+			"leaving them as NaN instead of injecting 0% returns."
+		)
+	return aligned
+
+
 # ── SDK warehouse fetch ────────────────────────────────────────────────
 
 async def _fetch_benchmark_via_sdk(
@@ -58,15 +97,17 @@ async def _fetch_benchmark_via_sdk(
 		df.columns = [c.lower() for c in df.columns]
 
 		date_col = next((c for c in ("date", "datetime", "timestamp") if c in df.columns), None)
-		close_col = next((c for c in ("close", "adj_close", "adjclose") if c in df.columns), None)
-		if date_col is None or close_col is None:
+		if date_col is None:
 			logger.warning(f"Warehouse benchmark response missing date/close columns: {list(df.columns)}")
 			return None
 
 		df[date_col] = pd.to_datetime(df[date_col])
 		df = df.sort_values(date_col).set_index(date_col)
-		close = df[close_col].astype(float)
-		returns = close.pct_change().fillna(0)
+		price = _select_benchmark_price(df, source="warehouse", symbol=symbol)
+		if price is None:
+			logger.warning(f"Warehouse benchmark response missing price columns: {list(df.columns)}")
+			return None
+		returns = _price_to_returns(price)
 		returns.index = returns.index.tz_localize(None)
 
 		logger.info(f"Fetched {len(returns)} benchmark data points from warehouse API ({symbol})")
@@ -112,7 +153,7 @@ async def get_benchmark_returns(
 			benchmark_data.index = benchmark_data.index.tz_localize(None)
 			benchmark_data.index = benchmark_data.index.normalize()
 			benchmark_data.index = benchmark_data.index.tz_localize('UTC')
-			benchmark_returns = benchmark_data.reindex(returns_index).fillna(0)
+			benchmark_returns = _align_benchmark_returns(benchmark_data, returns_index)
 			return benchmark_returns
 
 		logger.warning("No benchmark data retrieved from any source.")
@@ -152,9 +193,13 @@ async def _get_returns_via_connector(
 		if pd.api.types.is_datetime64_any_dtype(spy_data['datetime']):
 			spy_data['datetime'] = pd.to_datetime(spy_data['datetime']).dt.tz_convert('UTC').dt.tz_localize(None)
 
-		close = spy_data.set_index('datetime')['Close'].pct_change().fillna(0)
-		logger.info(f"Fetched {len(close)} benchmark data points from DataConnector.")
-		return close
+		spy_data = spy_data.set_index('datetime')
+		price = _select_benchmark_price(spy_data, source="DataConnector", symbol="^GSPC")
+		if price is None:
+			return None
+		returns = _price_to_returns(price)
+		logger.info(f"Fetched {len(returns)} benchmark data points from DataConnector.")
+		return returns
 
 	except Exception as e:
 		logger.warning(f"DataConnector benchmark fetch failed: {e}")
@@ -182,7 +227,15 @@ async def _get_returns_via_yfinance(
 			logger.error(f"No data returned from yfinance for {symbol}.")
 			return None
 
-		close = hist['Close'].pct_change().fillna(0)
+		price = _select_benchmark_price(
+			hist,
+			source="yfinance(auto_adjust=True)",
+			symbol=symbol,
+			assume_close_adjusted=True,
+		)
+		if price is None:
+			return None
+		close = _price_to_returns(price)
 		close.index = close.index.tz_localize(None)
 		logger.info(f"Fetched {len(close)} benchmark data points from yfinance ({symbol}).")
 		return close

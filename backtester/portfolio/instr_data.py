@@ -784,7 +784,7 @@ class InstrumentData:
             f"fundamental_features={self.get_fundamental_metrics()})"
         )
 
-    # For split-based validation ----------------------------------------------------
+    # For CrossValidation & Walk-Forward -------------------------------------------
 
     def slice_data(self, date_range: Tuple, *, end_inclusive: bool = True) -> "InstrumentData":
         """
@@ -841,7 +841,12 @@ class InstrumentData:
     # Methods --------------------------------------------------------------------
 
     @error_logger("Error filling NA values")
-    def fill_na_values(self, *, ffill_strategies: bool = False):
+    def fill_na_values(
+        self,
+        *,
+        ffill_strategies: bool = False,
+        price_ffill_limit: int | None = 1,
+    ):
         """
         Fill NA values using backtest-safe defaults.
 
@@ -851,7 +856,7 @@ class InstrumentData:
         default: missing strategy decisions become zero, while stateful
         positions can persist.
         """
-        self.prepare_prices_for_valuation()
+        self.prepare_prices_for_valuation(limit=price_ffill_limit)
         self.prepare_metrics_for_reporting()
         self.prepare_signals_for_execution(ffill_all=ffill_strategies)
         self.prepare_positions_for_accounting()
@@ -877,9 +882,9 @@ class InstrumentData:
                 self.parameters.loc[:, mask_other].ffill()
             )
 
-    def prepare_prices_for_valuation(self) -> pd.DataFrame:
-        """Forward-fill valuation prices without changing strategy state."""
-        self.prices = self.prices.ffill()
+    def prepare_prices_for_valuation(self, *, limit: int | None = 1) -> pd.DataFrame:
+        """Forward-fill short valuation gaps without carrying stale marks forever."""
+        self.prices = self.prices.ffill(limit=limit)
         return self.prices
 
     def prepare_metrics_for_reporting(self) -> pd.DataFrame:

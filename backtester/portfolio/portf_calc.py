@@ -229,7 +229,12 @@ class PortfolioCalculations:
     def compute_sharpe_ratio(self, risk_free_rate: Optional[float] = None, annualize: bool = True) -> float:
         if risk_free_rate is None:
             risk_free_rate = self.risk_free_rate
-        sr = calc_risk.sharpe_ratio(self.returns.to_frame(), risk_free_rate=risk_free_rate, days_per_year=self.trading_days, annualize=annualize)
+        sr = calc_risk.sharpe_ratio(
+            self.metric_returns.to_frame(),
+            risk_free_rate=risk_free_rate,
+            days_per_year=self.trading_days,
+            annualize=annualize,
+        )
         return float(sr.iloc[0])
 
     def compute_sortino_ratio(
@@ -240,7 +245,7 @@ class PortfolioCalculations:
     ) -> float:
         if risk_free_rate is None:
             risk_free_rate = self.risk_free_rate
-        adjusted = self.returns - ((risk_free_rate + target_return) / self.trading_days)
+        adjusted = self.metric_returns - ((risk_free_rate + target_return) / self.trading_days)
         downside = adjusted[adjusted < 0]
         if len(adjusted) == 0 or len(downside) == 0:
             return np.nan
@@ -319,7 +324,7 @@ class PortfolioCalculations:
         long_window: Optional[int] = None,
         **kwargs,
     ) -> Dict[str, Any]:
-        r = self.returns.dropna()
+        r = self.metric_returns
         annual = np.sqrt(self.trading_days)
         std_vol = r.std() * annual
         short_window = int(short_window or (30 if self.trading_days >= 252 else max(2, self.trading_days)))

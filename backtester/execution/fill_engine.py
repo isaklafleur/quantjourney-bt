@@ -93,6 +93,7 @@ class FillEngine:
         self._fill_history: List[Fill] = []
         self._last_fill_by_instrument: Dict[str, Fill] = {}
         self._last_fill_by_order: Dict[str, Fill] = {}
+        self._commission_state_by_order: Dict[str, Dict[str, float]] = {}
 
     # ── Submit ─────────────────────────────────────────────────────────
 
@@ -271,21 +272,18 @@ class FillEngine:
         if fill_qty <= 0:
             return None
 
-        # Apply slippage
-        fill_price = self.slippage.compute(
+        # Apply slippage. Limit-like orders are clamped back to price-or-better
+        # after slippage so a simulated fill can never violate the limit.
+        slipped_price = self.slippage.compute(
             price=theoretical_price,
             quantity=fill_qty,
             side=order.side,
             bar=bar,
         )
+        fill_price = self._apply_limit_price_constraint(order, slipped_price, theoretical_price)
 
-        # Apply commission
         notional = fill_price * fill_qty
-        commission_cost = self.commission.compute(
-            price=fill_price,
-            quantity=fill_qty,
-            notional=notional,
-        )
+        commission_cost = self._compute_incremental_commission(order, fill_price, fill_qty, notional)
 
         slippage_per_share = abs(fill_price - theoretical_price)
 
@@ -373,6 +371,55 @@ class FillEngine:
 
             case _:
                 return None
+
+    def _active_limit_price(self, order: Order, theoretical_price: float) -> Optional[float]:
+        if order.order_type == OrderType.LIMIT:
+            return order.limit_price
+        if order.order_type in (OrderType.STOP_LIMIT, OrderType.STOP_TRAIL_LIMIT):
+            return order._activated_limit_price or order.limit_price
+        if order.order_type == OrderType.OCO and order.limit_price is not None:
+            if order.side == OrderSide.BUY and theoretical_price <= order.limit_price:
+                return order.limit_price
+            if order.side == OrderSide.SELL and theoretical_price >= order.limit_price:
+                return order.limit_price
+        return None
+
+    def _apply_limit_price_constraint(
+        self,
+        order: Order,
+        fill_price: float,
+        theoretical_price: float,
+    ) -> float:
+        limit_price = self._active_limit_price(order, theoretical_price)
+        if limit_price is None:
+            return fill_price
+        if order.side == OrderSide.BUY:
+            return min(fill_price, limit_price)
+        return max(fill_price, limit_price)
+
+    def _compute_incremental_commission(
+        self,
+        order: Order,
+        fill_price: float,
+        fill_qty: float,
+        notional: float,
+    ) -> float:
+        state = self._commission_state_by_order.setdefault(
+            order.order_id,
+            {"quantity": 0.0, "notional": 0.0, "charged": 0.0},
+        )
+        cumulative_qty = state["quantity"] + abs(float(fill_qty))
+        cumulative_notional = state["notional"] + abs(float(notional))
+        cumulative_due = self.commission.compute(
+            price=fill_price,
+            quantity=cumulative_qty,
+            notional=cumulative_notional,
+        )
+        incremental = max(0.0, float(cumulative_due) - state["charged"])
+        state["quantity"] = cumulative_qty
+        state["notional"] = cumulative_notional
+        state["charged"] += incremental
+        return incremental
 
     def _compute_trail_stop(self, order: Order, bar: BarData) -> Optional[float]:
         """Compute the effective stop price for a trailing stop."""
