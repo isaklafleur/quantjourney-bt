@@ -1,10 +1,80 @@
-# QuantJourney Backtester Public Light
+# QuantJourney Backtester
 
-Public/light release surface for the QuantJourney backtester.
+**Local quantitative strategy backtesting powered by QuantJourney market data**
 
-This repository contains a runnable light backtester package, 21 public strategy examples, and supporting comparison materials that can be linked from QuantJourney docs and the Compare page.
+[![Python](https://img.shields.io/badge/Python-%3E%3D3.10-3776AB?logo=python&logoColor=white)](https://python.org)
+[![PyPI](https://img.shields.io/pypi/v/quantjourney-bt?color=orange)](https://pypi.org/project/quantjourney-bt/)
+[![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
+[![Platform](https://img.shields.io/badge/Platform-macOS%20%7C%20Linux%20%7C%20Windows-lightgrey)]()
+[![API](https://img.shields.io/badge/API-QuantJourney%20Cloud-1B4F72)](https://quantjourney.cloud)
+[![Changelog](https://img.shields.io/badge/Changelog-backtester.quantjourney.cloud-111827)](https://backtester.quantjourney.cloud/changelog)
 
-The PyPI package name is `quantjourney-bt`. The runtime package follows the current strategy API and is imported as `backtester`.
+QuantJourney Backtester is a Python framework for researching, testing, and
+reviewing systematic trading strategies. The cloud API supplies market data;
+strategy logic, portfolio accounting, execution simulation, metrics, and report
+generation run locally in Python.
+
+## Example Output
+
+Every run produces an institutional-quality report — equity curves, a monthly
+returns heatmap, crisis analysis, risk and rolling statistics, a trade blotter,
+and walk-forward / optimization diagnostics. A few examples:
+
+**Cumulative returns with regime overlay**
+
+![Cumulative returns with regime overlay](https://backtester.quantjourney.cloud/plots/cumulative_returns_with_regime.png)
+
+**Monthly returns heatmap**
+
+![Monthly returns heatmap](https://backtester.quantjourney.cloud/plots/monthly_returns_heatmap.png)
+
+**Crisis analysis across historical stress periods**
+
+![Crisis analysis](https://backtester.quantjourney.cloud/plots/crisis_summary.png)
+
+**Walk-forward out-of-sample equity**
+
+![Walk-forward out-of-sample equity](https://backtester.quantjourney.cloud/plots/optuna-real/wf_oos_equity.png)
+
+More report and chart examples at
+[backtester.quantjourney.cloud](https://backtester.quantjourney.cloud).
+
+## Why QuantJourney Backtester
+
+- **Transparent** — every metric is computed locally in readable Python; there is no black box to trust.
+- **Reproducible** — runs are fingerprinted over configuration and data, and reports embed metric definitions.
+- **Honest by construction** — next-bar execution (no look-ahead), realistic gap/stop/limit fills, and missing bars stay unavailable instead of becoming synthetic 0% returns.
+- **Deep analytics** — portfolio returns, risk, drawdowns, rolling statistics, attribution, Monte Carlo, and crisis analysis in one report.
+- **Execution-aware** — six order types with slippage, volume participation, commissions, and a full trade blotter.
+- **Validated** — rolling, expanding, and anchored walk-forward with purge/embargo, plus grid and Optuna parameter optimization.
+
+## What It Does
+
+The engine supports two core workflows:
+
+- **Weight mode** for portfolio research: generate target weights, apply risk
+  overlays and rebalance rules, then let positions drift through time.
+- **Order mode** for execution-aware strategies: submit market, limit, stop,
+  stop-limit, trailing-stop, bracket, and OCO orders through a deterministic
+  fill engine with slippage, volume participation, commissions, and trade
+  blotter output.
+
+The accounting path is designed for reproducible research:
+
+- Market data is fetched through `/bt/prepare` and converted into local pandas
+  containers.
+- Daily and intraday bars are supported through the `granularity` setting.
+- Missing market-data gaps remain unavailable assets instead of silent 0%
+  return observations.
+- Contract multipliers and lot sizes flow through order-mode NAV, trade value,
+  position values, weights, and commission notional.
+- Rebalance policies support calendar schedules, drift triggers, signal-change
+  triggers, circuit breakers, turnover gates, partial rebalance, and tax-aware
+  young-lot avoidance.
+- Reports write a text summary, JSON/CSV metrics, equity curve CSV/PNG,
+  dashboard HTML, selected chart pack, and run metadata.
+
+The runtime package is imported as `backtester`.
 
 ## Install
 
@@ -22,48 +92,29 @@ python -m pip install -e ".[dev,data]"
 pytest
 ```
 
+Do not install dependencies into the Homebrew/system Python. Use a virtual
+environment; otherwise macOS/Homebrew may raise an
+`externally-managed-environment` error and the launcher may miss packages such
+as `quantjourney_ti`.
+
 ## Repository Layout
 
 ```text
-backtester/               Public/light backtester package
-strategies/               21 runnable public strategy examples
-strategy.sh               Strategy launcher
+backtester/               Runtime package imported as backtester
+strategies/               Runnable strategy examples
+strategy.sh               Strategy launcher and report runner
 benchmarks/               Benchmark-suite notes
-compare/                  Cross-engine comparison notes
-docs/                     Public scope and release notes
-skills/                   Public strategy-authoring skill
-tests/                    Public repository checks
+skills/                   Strategy-authoring skill materials
+tests/                    Import, packaging, and report smoke checks
+CHANGELOG.md              Release history
 ```
 
-## Included Strategies
+The `tests/` directory is intentionally kept. It is not required at runtime, but
+it gives the package a quick install/import/report safety check before release.
 
-The public strategy suite contains 21 files:
+## Quick Start
 
-- `example_orders_01_market_sma_cross.py`
-- `example_orders_02_market_rsi_reversion.py`
-- `example_orders_03_limit_rsi_dip.py`
-- `example_orders_04_limit_trend_pullback.py`
-- `example_orders_05_stop_breakout_entry.py`
-- `example_orders_06_stop_loss_protection.py`
-- `example_orders_07_stop_limit_breakout.py`
-- `example_orders_08_stop_limit_protection.py`
-- `example_orders_09_trailing_stop_trend.py`
-- `example_orders_10_trailing_stop_rsi.py`
-- `example_orders_11_trailing_stop_limit.py`
-- `example_orders_12_bracket_trend.py`
-- `example_orders_13_bracket_rsi_reversion.py`
-- `example_orders_14_oco_dip_or_breakout.py`
-- `example_weights_01_sma_daily.py`
-- `example_weights_02_monthly_drift_etf.py`
-- `example_weights_03_weekly_rsi_reversion.py`
-- `example_weights_04_quarterly_dual_momentum.py`
-- `example_weights_05_monthly_inverse_vol.py`
-- `example_weights_06_signal_change_defensive.py`
-- `example_weights_07_intraday_rsi_15m.py`
-
-## Check That It Works
-
-List strategies:
+List available strategies:
 
 ```bash
 ./strategy.sh --list
@@ -88,11 +139,18 @@ export QJ_API_KEY="..."
 ./strategy.sh example_weights_01_sma_daily --output /tmp/qj-reports
 ```
 
-API key auth is preferred for CLI runs. Email/password auth also works; if the auth service returns an active-session conflict, the launcher retries with `replace_existing_session=true` by default. Set `QJ_REPLACE_EXISTING_SESSION=0` if you do not want a CLI run to replace an existing web session.
+API key auth is preferred for CLI runs. Email/password auth also works; if the
+auth service returns an active-session conflict, the launcher retries with
+`replace_existing_session=true` by default. Set
+`QJ_REPLACE_EXISTING_SESSION=0` if you do not want a CLI run to replace an
+existing web session.
 
 ## Data Granularity
 
-`Backtester(..., granularity="1d")` remains the default. For yfinance-backed `/bt/prepare` data you can request historical intraday bars with values such as `1m`, `5m`, `15m`, `30m`, or `1h`; numeric aliases like `granularity=5` are normalized to `5m`.
+`Backtester(..., granularity="1d")` remains the default. For yfinance-backed
+`/bt/prepare` data you can request historical intraday bars with values such as
+`1m`, `5m`, `15m`, `30m`, or `1h`; numeric aliases like `granularity=5` are
+normalized to `5m`.
 
 ```python
 strategy = MyStrategy(
@@ -104,39 +162,74 @@ strategy = MyStrategy(
 )
 ```
 
-Intraday availability depends on yfinance history coverage for the requested symbols and dates.
+Intraday availability depends on yfinance history coverage for the requested
+symbols and dates.
 
-The real backtest path fetches market data through QuantJourney credentials. The public/light report writes a text summary, `summary.json`, `metrics.csv`, `equity_curve.csv`, `equity_curve.png`, `dashboard.html`, a selected native QuantJourney chart pack under `plots/`, and `run_metadata.json`. Local object archives are not part of the public package. Full PDF packets, narrative generation, walk-forward validation, optimization and deeper institutional diagnostics are QuantJourney Backtester Pro/SaaS features.
+## Strategy Skeleton
+
+```python
+import asyncio
+import os
+import pandas as pd
+
+from backtester import Backtester
+
+
+class MyStrategy(Backtester):
+    def _compute_signals(self) -> pd.DataFrame:
+        close = self.instruments_data.get_feature("adj_close")
+        fast = close.rolling(20).mean()
+        slow = close.rolling(60).mean()
+        return ((fast > slow) & fast.notna() & slow.notna()).astype(float)
+
+    def _compute_weights(self) -> pd.DataFrame:
+        signals = self.instruments_data.get_feature(
+            "strategies", self.strategy_name, "signals"
+        )
+        active = signals.sum(axis=1).replace(0, pd.NA)
+        return signals.div(active, axis=0).fillna(0.0)
+
+    def _compute_positions(self) -> None:
+        pass
+
+
+async def main() -> None:
+    strategy = MyStrategy(
+        api_key=os.environ["QJ_API_KEY"],
+        strategy_name="sma_research",
+        instruments=["AAPL", "MSFT", "NVDA"],
+        backtest_period={"start": "2024-01-01", "end": "2025-01-01"},
+        source="yfinance",
+        granularity="1d",
+        initial_capital=100_000,
+    )
+    await strategy.run_strategy()
+    strategy.print_summary()
+
+
+if __name__ == "__main__":
+    asyncio.run(main())
+```
+
+## Reports
+
+By default a strategy run writes outputs under `reports/<strategy_name>/` or
+the directory passed to `--output`:
+
+- `summary.txt`
+- `summary.json`
+- `metrics.csv`
+- `equity_curve.csv`
+- `equity_curve.png`
+- `dashboard.html`
+- selected PNG charts under `plots/`
+- `run_metadata.json`
 
 Use `--no-reports` when you only want calculation and run metadata:
 
 ```bash
 ./strategy.sh example_weights_01_sma_daily --no-reports --output /tmp/qj-reports
 ```
-
-The `--check` path verifies the public package and strategy code without contacting the API.
-
-Do not install dependencies into the Homebrew/system Python. Use the local `.venv`; otherwise macOS/Homebrew may raise an `externally-managed-environment` error and the launcher may miss packages such as `quantjourney_ti`.
-
-## Public Scope
-
-Included:
-
-- Portfolio weight-mode examples.
-- Order-mode examples for market, limit, stop, stop-limit, trailing stop, bracket and OCO behavior.
-- Strategy launcher and output directory support.
-- Public/light engine modules required by those examples.
-- Public report artifacts built from the native QuantJourney metric and plotting modules: text summary, JSON/CSV metrics, equity CSV, dashboard HTML, equity PNG, selected PNG chart pack and run metadata.
-
-Excluded:
-
-- Full PDF factsheets and institutional report packets.
-- Local object archives and internal debug state.
-- Pro-only diagnostics: full plot orchestration, crisis analysis, trace plots, blotter plots and narrative generation.
-- Walk-forward validation and optimization.
-- Private deployment scripts, credentials and infrastructure files.
-- Private research orchestration code.
-- Internal-only report publication workflows.
 
 ## License
 

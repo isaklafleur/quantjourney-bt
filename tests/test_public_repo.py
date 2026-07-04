@@ -1,4 +1,4 @@
-# QuantJourney Backtester Public
+# QuantJourney Backtester
 # Copyright (c) 2026 QuantJourney.
 # Licensed under the Apache License 2.0.
 
@@ -16,11 +16,33 @@ STRATEGIES = ROOT / "strategies"
 sys.path.insert(0, str(ROOT))
 
 
-def test_python_files_have_quantjourney_public_header() -> None:
+def _repo_files(pattern: str) -> list[Path]:
+    if (ROOT / ".git").exists():
+        completed = subprocess.run(
+            ["git", "ls-files", pattern],
+            cwd=ROOT,
+            check=True,
+            text=True,
+            capture_output=True,
+        )
+        return [ROOT / line for line in completed.stdout.splitlines() if line]
+    return sorted(ROOT.rglob(pattern))
+
+
+def _strategy_files() -> list[Path]:
+    if (ROOT / ".git").exists():
+        return [
+            path for path in _repo_files("strategies/example_*.py")
+            if path.exists()
+        ]
+    return sorted(STRATEGIES.glob("example_*.py"))
+
+
+def test_python_files_have_quantjourney_header() -> None:
     missing = []
     skipped_roots = {".git", ".venv", "reports", "plots"}
 
-    for path in ROOT.rglob("*.py"):
+    for path in _repo_files("*.py"):
         parts = path.relative_to(ROOT).parts
         if parts[0] in skipped_roots or "__pycache__" in parts:
             continue
@@ -35,7 +57,7 @@ def test_python_files_have_quantjourney_public_header() -> None:
     assert missing == []
 
 
-def test_public_package_ships_only_quantjourney_plot_theme() -> None:
+def test_package_ships_only_quantjourney_plot_theme() -> None:
     theme_files = sorted(
         path.name
         for path in (ROOT / "backtester" / "plots" / "theme" / "configs").glob("*.py")
@@ -44,16 +66,18 @@ def test_public_package_ships_only_quantjourney_plot_theme() -> None:
     assert theme_files == ["__init__.py", "quantjourney.py"]
 
 
-def test_public_strategy_suite_has_21_strategies() -> None:
-    files = sorted(STRATEGIES.glob("example_*.py"))
+def test_strategy_suite_has_expected_strategy_families() -> None:
+    files = _strategy_files()
+    order_files = [path for path in files if path.name.startswith("example_orders_")]
+    weight_files = [path for path in files if path.name.startswith("example_weights_")]
 
-    assert len(files) == 21
-    assert len(list(STRATEGIES.glob("example_orders_*.py"))) == 14
-    assert len(list(STRATEGIES.glob("example_weights_*.py"))) == 7
+    assert len(files) >= 21
+    assert len(order_files) >= 14
+    assert len(weight_files) >= 7
 
 
-def test_public_strategy_modules_import() -> None:
-    for path in sorted(STRATEGIES.glob("example_*.py")):
+def test_strategy_modules_import() -> None:
+    for path in _strategy_files():
         spec = importlib.util.spec_from_file_location(path.stem, path)
         assert spec is not None
         assert spec.loader is not None
@@ -61,7 +85,7 @@ def test_public_strategy_modules_import() -> None:
         spec.loader.exec_module(module)
 
 
-def test_backtester_public_imports() -> None:
+def test_backtester_imports() -> None:
     from backtester import Backtester
     from backtester.engines import StrategyPerformanceAnalysis
     from backtester.sdk.client import APIClient, AsyncAPIClient
@@ -168,7 +192,7 @@ def test_auth_active_session_conflict_is_detected(monkeypatch) -> None:
     assert SDKClientMixin._replace_existing_session_enabled() is False
 
 
-def test_public_metadata_archive_writes_json_only(tmp_path) -> None:
+def test_metadata_archive_writes_json_only(tmp_path) -> None:
     import json
     import re
     from types import SimpleNamespace
@@ -238,7 +262,7 @@ def test_strategy_launcher_check_mode() -> None:
     assert "Import check passed" in completed.stdout
 
 
-def test_public_light_excludes_pro_report_modules() -> None:
+def test_package_excludes_internal_report_modules() -> None:
     forbidden_paths = [
         "backtester/engines/pdf_creation.py",
         "backtester/engines/factsheet_pdf.py",
@@ -269,7 +293,7 @@ def test_public_light_excludes_pro_report_modules() -> None:
         assert not (ROOT / relative_path).exists(), relative_path
 
 
-def test_public_light_excludes_object_archive_hooks() -> None:
+def test_package_excludes_object_archive_hooks() -> None:
     forbidden_tokens = [
         "QJ_SAVE_" + "PICKLE_ARCHIVE",
         "portfolio_data" + ".pkl",
@@ -296,7 +320,7 @@ def test_public_light_excludes_object_archive_hooks() -> None:
     assert offenders == []
 
 
-def test_public_light_report_generates_dashboard_metrics_and_plots(tmp_path) -> None:
+def test_report_generates_dashboard_metrics_and_plots(tmp_path) -> None:
     import re
     import pandas as pd
     from types import SimpleNamespace
