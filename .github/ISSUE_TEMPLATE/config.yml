@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: QuantJourney Backtester website
+    url: https://backtester.quantjourney.cloud
+    about: Documentation, the strategy gallery, and report examples.
+  - name: Roadmap
+    url: https://github.com/QuantJourneyOrg/quantjourney-bt/blob/main/docs/ROADMAP.md
+    about: Direction of travel by theme (no dates) before requesting a feature.

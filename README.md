@@ -54,6 +54,23 @@ signals, signals become either target weights or orders, execution assumptions
 turn those decisions into fills, and portfolio state is used to reconstruct NAV,
 metrics, plots, and reproducibility metadata.
 
+### What you want to do -> what to use
+
+| I want to... | Use |
+|---|---|
+| Generate long / flat / short or ranking intent | `_compute_signals()` |
+| Convert intent into target portfolio exposure | `_compute_weights()` |
+| Apply caps, vol targeting, inverse vol, or risk parity | `risk_model=...` |
+| Trade only on calendar, drift, signal, or turnover triggers | `RebalancePolicy(...)` |
+| Submit market / limit / stop / trailing / bracket / OCO orders | `execution_mode="orders"` + `_compute_orders(...)` |
+| Model spread, impact, and commission assumptions | slippage & commission models |
+| Validate parameters out of sample | walk-forward / Optuna |
+
+More on engine semantics — one-bar weight timing, order timing, fill
+assumptions, and the common failure modes it helps you catch (survivorship,
+look-ahead, unrealistic intrabar fills, costs too low) — is documented at
+[backtester.quantjourney.cloud/engine](https://backtester.quantjourney.cloud/engine).
+
 ## Reproducible Demo Without API Key
 
 Run the first strategy against deterministic bundled sample data:
@@ -164,6 +181,27 @@ it gives the package a quick install/import/report safety check before release.
   dates or ordering commitments.
 - [Strategy catalog](strategies/README.md) - runnable examples with source and
   result links.
+- [Contributing](CONTRIBUTING.md) - how to add example strategies, fixes, and
+  docs (fork, branch, pull request).
+
+## AI Co-Pilot Skills
+
+The `skills/` directory holds guidance packs for AI-assisted research. When you
+work with an AI coding assistant, point it at the relevant `SKILL.md` so it
+follows the engine's conventions instead of guessing:
+
+| Skill | Use it to |
+|---|---|
+| [`qj-strategy-ideas`](skills/qj-strategy-ideas/SKILL.md) | Turn an idea into a runnable strategy — weights vs orders, the nearest example, the two-method pattern. |
+| [`qj-strategy-author`](skills/qj-strategy-author/SKILL.md) | Write a clean, focused example strategy. |
+| [`qj-strategy-reviewer`](skills/qj-strategy-reviewer/SKILL.md) | Review a strategy for look-ahead, exposure, cost realism, and mode fit. |
+| [`qj-report-analyst`](skills/qj-report-analyst/SKILL.md) | Read a report and its plots and judge whether the result is trustworthy. |
+| [`qj-config-helper`](skills/qj-config-helper/SKILL.md) | Configure the engine — parameters, rebalance policy, risk overlays, granularity. |
+
+For example: when writing a new strategy, open
+`skills/qj-strategy-ideas/SKILL.md` and follow the pattern; when reviewing one,
+use `skills/qj-strategy-reviewer/SKILL.md`; to make sense of the output, use
+`skills/qj-report-analyst/SKILL.md`.
 
 ## Quick Start
 
