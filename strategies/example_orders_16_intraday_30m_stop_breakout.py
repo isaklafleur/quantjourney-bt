@@ -63,6 +63,9 @@ class IntradayStopBreakout30m(Backtester):
         self._entry_bar = {}
 
     def _compute_orders(self, date, bars, current_positions, nav) -> None:
+        if pd.isna(nav) or nav <= 0:
+            return
+
         high = self.instruments_data.get_feature("high")
         if date not in high.index:
             return
@@ -73,6 +76,10 @@ class IntradayStopBreakout30m(Backtester):
         for inst in self.instruments:
             self._bar_count[inst] = self._bar_count.get(inst, 0) + 1
             bar = bars[inst]
+            close = float(bar.close) if not pd.isna(bar.close) else float("nan")
+            if pd.isna(close) or close <= 0:
+                continue
+
             pos = current_positions.get(inst, 0.0)
 
             # Time-based exit.
@@ -85,10 +92,10 @@ class IntradayStopBreakout30m(Backtester):
                 continue
 
             prior_high = high[inst].iloc[pos_idx - self.LOOKBACK : pos_idx].max()
-            if pd.isna(prior_high):
+            if pd.isna(prior_high) or prior_high <= 0:
                 continue
 
-            shares = int(nav * 0.20 / bar.close)
+            shares = int(nav * 0.20 / close)
             if shares > 0:
                 self.fill_engine.submit(Order(
                     inst,

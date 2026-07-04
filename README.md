@@ -77,6 +77,12 @@ Each run can produce metrics, plots, equity curves, drawdowns, rolling risk,
 crisis diagnostics, optimization evidence, walk-forward results, CSV/JSON
 artifacts, HTML dashboards, PDF tear sheets, and reproducibility metadata.
 
+## What Stays Local
+
+Your strategy code, signals, portfolio accounting, order simulation, metrics,
+plots, generated reports, and run artifacts stay local. QuantJourney Cloud is
+used for market-data preparation and authentication.
+
 ## What It Is Not
 
 This is not a broker, not a live trading system, not investment advice, and not
@@ -86,8 +92,8 @@ impact. Those assumptions are documented so they can be changed, not hidden.
 
 ## Example Output
 
-Every run produces an institutional-quality report — equity curves, a monthly
-returns heatmap, crisis analysis, risk and rolling statistics, a trade blotter,
+Every run produces a review-ready research packet — equity curves, monthly
+returns heatmaps, crisis analysis, risk and rolling statistics, trade blotters,
 and walk-forward / optimization diagnostics. A few examples:
 
 **Cumulative returns with regime overlay**

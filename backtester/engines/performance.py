@@ -240,7 +240,7 @@ class StrategyPerformanceAnalysis:
                 "risk_free_rate": self.config.risk_free_rate,
                 "returns_index": self.returns.index,
                 "config": {"risk_free_rate": self.config.risk_free_rate, "reporting_frequency": "daily"},
-                "edition": "public_light",
+                "edition": "open_source",
             }
         )
         return results

@@ -107,6 +107,32 @@ def test_backtester_imports() -> None:
     assert RebalancePolicy(frequency="D").frequency == "D"
 
 
+def test_order_blotter_accepts_fill_metadata() -> None:
+    import pandas as pd
+
+    from backtester.engines.blotter import Blotter
+
+    blotter = Blotter()
+    blotter.record_trade(
+        order_id="order-1",
+        instrument="AAPL",
+        side="buy",
+        quantity=10,
+        price=101.25,
+        trade_value=1012.50,
+        timestamp=pd.Timestamp("2026-01-02 14:30:00"),
+        transaction_cost=1.25,
+        slippage=0.05,
+        theoretical_price=101.20,
+        fill_status="filled",
+    )
+
+    trade = blotter.get_trades_dataframe().iloc[0].to_dict()
+    assert trade["Slippage"] == 0.05
+    assert trade["TheoreticalPrice"] == 101.20
+    assert trade["FillStatus"] == "filled"
+
+
 def test_backtester_granularity_config_supports_intraday_aliases() -> None:
     from backtester.core import _normalize_granularity
 

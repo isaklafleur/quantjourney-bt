@@ -1,5 +1,11 @@
 # QuantJourney Backtester Changelog
 
+## 0.8.5 - 2026-07-04
+
+### Fixed
+- Fixed order-mode trade recording so fill metadata from the execution engine (`slippage`, theoretical price and fill status) is accepted by the blotter and preserved in trade artifacts.
+- Hardened the 30-minute intraday stop-breakout example against sparse provider bars by skipping invalid NAV, price and breakout-reference observations before sizing orders.
+
 ## 0.8.4 - 2026-07-04
 
 ### Added

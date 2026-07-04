@@ -90,6 +90,9 @@ class Blotter:
 		trade_value: float,
 		timestamp: pd.Timestamp,
 		transaction_cost: float = 0.0,
+		slippage: float = 0.0,
+		theoretical_price: float | None = None,
+		fill_status: str | None = None,
 		trade_id: str = None,
 	) -> None:
 		"""
@@ -104,6 +107,9 @@ class Blotter:
 			trade_value (float): Total value of the trade.
 			timestamp (pd.Timestamp): Time when the trade was executed.
 			transaction_cost (float): Transaction cost associated with the trade.
+			slippage (float): Slippage cost or price impact recorded by the fill engine.
+			theoretical_price (float | None): Reference price before slippage.
+			fill_status (str | None): Fill status reported by the execution engine.
 			trade_id (str): Unique identifier for the trade.
 		"""
 		if trade_id is None:
@@ -119,6 +125,9 @@ class Blotter:
 			"Price": price,
 			"TradeValue": trade_value,
 			"TransactionCost": transaction_cost,
+			"Slippage": slippage,
+			"TheoreticalPrice": theoretical_price,
+			"FillStatus": fill_status,
 		}
 		self.trades.append(trade_record)
 
