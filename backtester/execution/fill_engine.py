@@ -36,7 +36,7 @@ from __future__ import annotations
 
 import uuid
 from collections import defaultdict
-from typing import Dict, List, Optional
+from typing import Callable, Dict, List, Optional
 
 from backtester.execution.order_types import (
     BarData,
@@ -77,11 +77,13 @@ class FillEngine:
         commission: Optional[CommissionScheme] = None,
         fill_at: str = "open",  # "open" or "close"
         max_volume_participation: Optional[float] = None,
+        notional_fn: Optional[Callable[[str, float, float], float]] = None,
     ):
         self.slippage = slippage or NoSlippage()
         self.commission = commission or ZeroCommission()
         self.fill_at = fill_at
         self.max_volume_participation = max_volume_participation
+        self.notional_fn = notional_fn
 
         # Active orders keyed by instrument
         self._orders: Dict[str, List[Order]] = defaultdict(list)
@@ -282,7 +284,7 @@ class FillEngine:
         )
         fill_price = self._apply_limit_price_constraint(order, slipped_price, theoretical_price)
 
-        notional = fill_price * fill_qty
+        notional = self._trade_notional(order.instrument, fill_price, fill_qty)
         commission_cost = self._compute_incremental_commission(order, fill_price, fill_qty, notional)
 
         slippage_per_share = abs(fill_price - theoretical_price)
@@ -420,6 +422,11 @@ class FillEngine:
         state["notional"] = cumulative_notional
         state["charged"] += incremental
         return incremental
+
+    def _trade_notional(self, instrument: str, price: float, quantity: float) -> float:
+        if self.notional_fn is not None:
+            return float(self.notional_fn(instrument, price, quantity))
+        return float(price) * float(quantity)
 
     def _compute_trail_stop(self, order: Order, bar: BarData) -> Optional[float]:
         """Compute the effective stop price for a trailing stop."""

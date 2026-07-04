@@ -380,6 +380,9 @@ class Backtester(SDKClientMixin, ReportingMixin):
                 commission=commission_scheme,
                 fill_at=fill_at,
                 max_volume_participation=max_volume_participation,
+                notional_fn=lambda instrument, price, quantity: self._trade_notional(
+                    instrument, quantity, price
+                ),
             )
         self._order_context: Dict[str, Any] = {}
         self.average_entry_price: Dict[str, Optional[float]] = {}
@@ -1089,7 +1092,7 @@ class Backtester(SDKClientMixin, ReportingMixin):
             return
 
         close = self.instruments_data.get_feature("adj_close")
-        returns = close.pct_change().fillna(0.0)
+        returns = self._compute_returns_preserve_gaps(close)
 
         adjusted = self._risk_model.adjust(weights, returns)
 
@@ -1302,6 +1305,15 @@ class Backtester(SDKClientMixin, ReportingMixin):
     def _trade_notional(self, instrument: str, quantity: float, price: float) -> float:
         return self._contract_spec(instrument).notional(quantity, price)
 
+    @staticmethod
+    def _compute_returns_preserve_gaps(prices: pd.DataFrame) -> pd.DataFrame:
+        returns = prices.pct_change(fill_method=None)
+        if len(returns) > 0:
+            first_idx = returns.index[0]
+            first_available = prices.loc[first_idx].notna()
+            returns.loc[first_idx, first_available] = 0.0
+        return returns
+
     def _signed_position_value(self, instrument: str, quantity: float, price: float) -> float:
         spec = self._contract_spec(instrument)
         if spec.inverse:
@@ -1397,7 +1409,7 @@ class Backtester(SDKClientMixin, ReportingMixin):
         target_weights_inv = target_weights * (1.0 - cash_buffer)
 
         # Asset returns
-        asset_returns = close.pct_change().fillna(0.0)
+        asset_returns = self._compute_returns_preserve_gaps(close)
 
         # Benchmark returns for tracking-error trigger (if available)
         benchmark_returns = None
@@ -1432,7 +1444,7 @@ class Backtester(SDKClientMixin, ReportingMixin):
         # RebalanceEngine.actual_weights is the realised/end-of-bar exposure
         # state. return_weights is the beginning-of-bar exposure used for P&L.
         return_weights = getattr(engine, "return_weights", actual_weights)
-        portfolio_returns = (return_weights * asset_returns).sum(axis=1)
+        portfolio_returns = (return_weights * asset_returns.fillna(0.0)).sum(axis=1)
 
         # ── Transaction costs: implied trades, only on rebalance days ──
         # Weight mode has no explicit orders, so the accounting layer infers

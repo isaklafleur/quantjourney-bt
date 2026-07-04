@@ -311,9 +311,13 @@ class RebalanceEngine:
         cal_flags.iloc[0] = True
         rebal_mask = cal_flags.values  # bool array
 
-        # Asset returns as numpy
-        ret = asset_returns.reindex(dates).fillna(0.0).values   # (n, m)
-        target_w = target_weights.values                        # (n, m)
+        # Asset returns as numpy. Missing returns mark an instrument as
+        # unavailable for that bar; weights are reassigned only across
+        # available instruments before NaNs are converted to 0 for math.
+        target_w, ret, available = self._prepare_target_and_returns(
+            target_weights,
+            asset_returns,
+        )
         actual_w = np.empty((n, m), dtype=np.float64)
         return_w = np.empty((n, m), dtype=np.float64)
 
@@ -331,6 +335,15 @@ class RebalanceEngine:
             actual_w[start] = w0
 
             if end - start <= 1:
+                continue
+
+            if not available[start + 1: end].all():
+                current = w0.copy()
+                for pos in range(start + 1, end):
+                    period_w = self._mask_unavailable_vector(current, available[pos])
+                    return_w[pos] = period_w
+                    current = self._drift_with_cash(period_w, ret[pos])
+                    actual_w[pos] = current
                 continue
 
             # Drift within segment while preserving explicit cash as a zero-return sleeve.
@@ -393,6 +406,64 @@ class RebalanceEngine:
             return np.zeros_like(clean_weights)
         return grown / denominator
 
+    @classmethod
+    def _prepare_target_and_returns(
+        cls,
+        target_weights: pd.DataFrame,
+        asset_returns: pd.DataFrame,
+    ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+        dates = target_weights.index
+        instruments = target_weights.columns
+        returns = asset_returns.reindex(index=dates, columns=instruments).astype(float)
+        available = returns.notna().to_numpy()
+        target = target_weights.to_numpy(dtype=float, copy=True)
+        for i in range(len(target)):
+            target[i] = cls._mask_unavailable_vector(target[i], available[i])
+        ret = returns.fillna(0.0).to_numpy(dtype=float)
+        return target, ret, available
+
+    @staticmethod
+    def _mask_unavailable_vector(weights: np.ndarray, available: np.ndarray) -> np.ndarray:
+        clean = np.nan_to_num(weights, nan=0.0, posinf=0.0, neginf=0.0).astype(float, copy=True)
+        if available.all():
+            return clean
+        original_gross = float(np.abs(clean).sum())
+        clean[~available] = 0.0
+        remaining_gross = float(np.abs(clean).sum())
+        if original_gross <= 1e-12:
+            return clean
+        if remaining_gross <= 1e-12:
+            return np.zeros_like(clean)
+        return clean * (original_gross / remaining_gross)
+
+    @staticmethod
+    def _renormalize_traded_sleeve(
+        new_w: np.ndarray,
+        target_w: np.ndarray,
+        keep_mask: np.ndarray,
+    ) -> np.ndarray:
+        traded_mask = ~keep_mask
+        if not traded_mask.any():
+            return new_w
+
+        target_traded = target_w[traded_mask]
+        target_total = target_w.sum()
+        kept_total = new_w[keep_mask].sum()
+        if abs(target_total) > 1e-12 and abs(target_traded.sum()) > 1e-12:
+            new_w[traded_mask] = target_traded * (
+                (target_total - kept_total) / target_traded.sum()
+            )
+            return new_w
+
+        target_gross = np.abs(target_w).sum()
+        kept_gross = np.abs(new_w[keep_mask]).sum()
+        traded_gross = np.abs(target_traded).sum()
+        if traded_gross > 1e-12:
+            new_w[traded_mask] = target_traded * (
+                max(target_gross - kept_gross, 0.0) / traded_gross
+            )
+        return new_w
+
     def run(
         self,
         target_weights: pd.DataFrame,
@@ -433,8 +504,10 @@ class RebalanceEngine:
         sig_flags = self._signal_change_flags(target_weights)
 
         # Arrays for the simulation loop
-        target_w = target_weights.values                        # (n, m)
-        ret = asset_returns.reindex(dates).fillna(0.0).values   # (n, m)
+        target_w, ret, available = self._prepare_target_and_returns(
+            target_weights,
+            asset_returns,
+        )
         actual_w = np.zeros((n, m), dtype=np.float64)
         return_w = np.zeros((n, m), dtype=np.float64)
         rebal = np.zeros(n, dtype=bool)
@@ -596,26 +669,11 @@ class RebalanceEngine:
                         # Re-normalise only the traded sleeve so kept weights
                         # remain genuinely kept. For market-neutral books,
                         # use gross exposure rather than net sum.
-                        target_total = target_w[i].sum()
-                        traded_mask = ~keep_mask
-                        if traded_mask.any():
-                            target_traded = target_w[i][traded_mask]
-                            kept_total = new_w[keep_mask].sum()
-                            if abs(target_total) > 1e-12 and abs(target_traded.sum()) > 1e-12:
-                                new_w[traded_mask] = target_traded * (
-                                    (target_total - kept_total) / target_traded.sum()
-                                )
-                            else:
-                                target_gross = np.abs(target_w[i]).sum()
-                                kept_gross = np.abs(new_w[keep_mask]).sum()
-                                traded_gross = np.abs(target_traded).sum()
-                                if traded_gross > 1e-12:
-                                    new_w[traded_mask] = target_traded * (
-                                        max(target_gross - kept_gross, 0.0) / traded_gross
-                                    )
+                        new_w = self._renormalize_traded_sleeve(new_w, target_w[i], keep_mask)
 
                     # ── Tax-lot avoidance heuristic ──
                     if self.policy.avoid_short_term_gains and i > 0:
+                        keep_mask = np.zeros(m, dtype=bool)
                         for j in range(m):
                             if new_w[j] < current_w[j]:
                                 # Reducing position — check holding period
@@ -623,11 +681,11 @@ class RebalanceEngine:
                                 if bars_held < self.policy.short_term_days:
                                     # Keep current weight (don't sell young lots)
                                     new_w[j] = current_w[j]
-                        # Re-normalise
-                        target_total = target_w[i].sum()
-                        current_total = new_w.sum()
-                        if current_total > 1e-12 and target_total > 1e-12:
-                            new_w *= target_total / current_total
+                                    keep_mask[j] = True
+                        # Re-normalise only the sleeve that can trade, so young
+                        # lots remain frozen and market-neutral books use gross.
+                        if keep_mask.any():
+                            new_w = self._renormalize_traded_sleeve(new_w, target_w[i], keep_mask)
 
                     # Track turnover (cached — computed once above)
                     actual_turnover = float(np.abs(new_w - current_w).sum())
@@ -645,6 +703,7 @@ class RebalanceEngine:
             else:
                 turnover_ring.append(0.0)
 
+            current_w = self._mask_unavailable_vector(current_w, available[i])
             period_w = current_w.copy()
             return_w[i] = period_w
             day_ret = (period_w * ret[i]).sum()
@@ -653,7 +712,7 @@ class RebalanceEngine:
 
             if not rebal[i] and i > 0:
                 # DRIFT: w'_j = w_j × (1 + r_j) / (cash + Σ(w_k × (1 + r_k)))
-                current_w = self._drift_with_cash(current_w, ret[i])
+                current_w = self._drift_with_cash(period_w, ret[i])
 
             actual_w[i] = current_w
 

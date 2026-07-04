@@ -47,7 +47,7 @@ class Universe:
         canonical shape source for all factory methods.
     _sectors : dict[str, str]
         Instrument → sector mapping (e.g. ``{"AAPL": "Tech"}``).
-        Optional instrument grouping metadata.
+        Used by ``PositionLimitModel`` and future sector-aware logic.
     """
 
     _close: pd.DataFrame
@@ -154,13 +154,23 @@ class Universe:
 
     @cached_property
     def returns(self) -> pd.DataFrame:
-        """Simple daily returns: ``close.pct_change().fillna(0)``."""
-        return self._close.pct_change().fillna(0.0)
+        """Simple returns, preserving NaN gaps as unavailable bars."""
+        returns = self._close.pct_change(fill_method=None)
+        if len(returns) > 0:
+            first_idx = returns.index[0]
+            first_available = self._close.loc[first_idx].notna()
+            returns.loc[first_idx, first_available] = 0.0
+        return returns
 
     @cached_property
     def log_returns(self) -> pd.DataFrame:
-        """Log daily returns: ``np.log(close / close.shift(1)).fillna(0)``."""
-        return np.log(self._close / self._close.shift(1)).fillna(0.0)
+        """Log returns, preserving NaN gaps as unavailable bars."""
+        returns = np.log(self._close / self._close.shift(1))
+        if len(returns) > 0:
+            first_idx = returns.index[0]
+            first_available = self._close.loc[first_idx].notna()
+            returns.loc[first_idx, first_available] = 0.0
+        return returns
 
     @cached_property
     def cumulative_returns(self) -> pd.DataFrame:
@@ -173,7 +183,7 @@ class Universe:
 
     @property
     def sectors(self) -> Dict[str, str]:
-        """Instrument → sector map."""
+        """Instrument → sector map (e.g. for PositionLimitModel)."""
         return self._sectors
 
     @sectors.setter
