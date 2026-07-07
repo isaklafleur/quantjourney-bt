@@ -29,7 +29,13 @@
     • ADD  avoid_short_term_gains flag (basic tax-lot awareness)
     • DOC  _signal_change_flags operates on target_weights, not raw signals
 
-    See: _docs/ADR_REBALANCING.md for full design rationale.
+    Calendar convention sensitivity
+    ───────────────────────────────
+    The calendar anchor is not a formality: on the same strategy we measured
+    Sharpe 0.494 with "BME" (business month-END) vs 0.538 with "BMS"
+    (business month-START) — roughly a 9% relative difference coming from the
+    rebalance calendar convention alone. Treat the frequency anchor as a
+    parameter to sensitivity-test, not a fixed detail.
 
 Institutional-grade QuantJourney Backtester component.
 Designed for deterministic strategy simulation, portfolio accounting,
@@ -43,11 +49,16 @@ Licensed under the Apache License 2.0.
 from __future__ import annotations
 
 import enum
+import warnings
 import numpy as np
 import pandas as pd
 from collections import deque
 from dataclasses import dataclass, field
 from typing import Optional
+
+# One-time warning guards (per process) for known no-op policy fields.
+_WARNED_REBALANCE_AT = False
+_WARNED_MIN_TRADE_SIZE = False
 
 
 # ─────────────────────────────────────────────────────────────────────
@@ -56,19 +67,18 @@ from typing import Optional
 
 class RebalanceAt(enum.Enum):
     """
-    When within the bar to execute the rebalance.
+    When within the bar to execute the rebalance — *timing intent only*.
 
-    Downstream consumers (FillEngine / CostEngine) use this to select
-    the fill price and corresponding slippage model:
+        OPEN         — intent: fill at next-bar open
+        CLOSE        — intent: fill at current-bar close (default)
+        VWAP_WINDOW  — intent: fill at bar VWAP (or TWAP proxy)
 
-        OPEN         — fill at next-bar open  (most common for daily)
-        CLOSE        — fill at current-bar close
-        VWAP_WINDOW  — fill at bar VWAP (or TWAP proxy)
-
-    The RebalanceEngine itself is price-agnostic; it only records the
-    *timing intent* on ``engine.rebalance_at`` so that the caller
-    (``core._compute_performance_weight_based``) can route fills
-    accordingly.
+    This enum records timing intent. The current weight-mode performance
+    path should still be treated as daily close-to-close accounting unless
+    open/VWAP execution is explicitly implemented and tested in the
+    performance path. No downstream consumer currently routes fills based
+    on this value: the RebalanceEngine only exposes it on
+    ``engine.rebalance_at``, and the accounting engine does not read it.
     """
     OPEN = "open"
     CLOSE = "close"
@@ -95,8 +105,11 @@ class RebalancePolicy:
 
     Execution timing
     ────────────────
-        rebalance_at  — OPEN / CLOSE / VWAP_WINDOW
-        Propagated to FillEngine so slippage matches execution intent.
+        rebalance_at  — OPEN / CLOSE / VWAP_WINDOW (timing *intent* only).
+        NOT currently honored by the accounting engine: the weight-mode
+        performance path is daily close-to-close accounting regardless of
+        this setting, until open/VWAP execution is explicitly implemented
+        and tested in the performance path.
 
     Tax awareness
     ─────────────
@@ -153,6 +166,10 @@ class RebalancePolicy:
     #   Rolling 252-trading-day turnover budget (one-way).
     #   Replaces the naïve calendar-year reset.
     min_trade_size: float = 0.0
+    #   NOT IMPLEMENTED — this field currently has no readers in the
+    #   engine: trades below this size are NOT filtered. Setting it to a
+    #   non-zero value emits a one-time warning and has no effect on
+    #   results.
 
     # ── Partial rebalance ──
     partial_rebalance: bool = False
@@ -237,6 +254,9 @@ class RebalancePresets:
         avoid_short_term_gains=True,
     )
 
+    # NOTE: rebalance_at=VWAP_WINDOW below is aspirational metadata — it
+    # records execution *intent* only and is not honored by the accounting
+    # engine (weight-mode accounting is daily close-to-close regardless).
     INSTITUTIONAL = RebalancePolicy(
         frequency="BME",
         rebalance_at=RebalanceAt.VWAP_WINDOW,
@@ -270,6 +290,30 @@ class RebalanceEngine:
         self.policy = policy
         self.stats: dict = {}
         self.rebalance_at: RebalanceAt = policy.rebalance_at
+        self._warn_unsupported_policy_fields(policy)
+
+    @staticmethod
+    def _warn_unsupported_policy_fields(policy: RebalancePolicy) -> None:
+        """One-time (per process) warnings for policy fields with no effect."""
+        global _WARNED_REBALANCE_AT, _WARNED_MIN_TRADE_SIZE
+        if policy.rebalance_at != RebalanceAt.CLOSE and not _WARNED_REBALANCE_AT:
+            _WARNED_REBALANCE_AT = True
+            warnings.warn(
+                f"RebalancePolicy.rebalance_at={policy.rebalance_at.value!r} is "
+                "not honored by the accounting engine — execution is next-bar "
+                "close (daily close-to-close accounting). The setting records "
+                "timing intent only.",
+                UserWarning,
+                stacklevel=3,
+            )
+        if policy.min_trade_size and not _WARNED_MIN_TRADE_SIZE:
+            _WARNED_MIN_TRADE_SIZE = True
+            warnings.warn(
+                f"RebalancePolicy.min_trade_size={policy.min_trade_size!r} is "
+                "not implemented — trades below this size are NOT filtered.",
+                UserWarning,
+                stacklevel=3,
+            )
 
     # ── Public API ──────────────────────────────────────────────────
 
@@ -790,7 +834,19 @@ class RebalanceEngine:
             return pd.Series(True, index=dates)
 
         if freq == "W":
-            return pd.Series(dates.weekday == self.policy.weekday, index=dates)
+            # Weekly schedule with holiday snap: a scheduled rebalance
+            # weekday (e.g. Friday) falling on an exchange holiday is
+            # snapped to the last actual trading date on or before it —
+            # the same treatment as the BME/BQE path below — instead of
+            # silently dropping that week's rebalance.
+            _ANCHORS = ("MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN")
+            anchor = _ANCHORS[self.policy.weekday % 7]
+            scheduled = pd.date_range(dates[0], dates[-1], freq=f"W-{anchor}")
+            pos = np.searchsorted(dates.values, scheduled.values, side="right") - 1
+            pos = np.unique(pos[pos >= 0])
+            flags = np.zeros(len(dates), dtype=bool)
+            flags[pos] = True
+            return pd.Series(flags, index=dates)
 
         # Every N trading days: "21D", "5D", etc.
         if freq.endswith("D") and freq[:-1].isdigit():

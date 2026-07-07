@@ -35,6 +35,7 @@ from backtester.walkforward.runner import FoldRunner
 from backtester.walkforward.result import FoldResult, WalkForwardResult
 from backtester.walkforward.statistics.aggregation import (
     aggregate_oos_returns,
+    bootstrap_sharpe_ci,
     compute_composite_metrics,
 )
 from backtester.walkforward.statistics.overfit import (
@@ -293,27 +294,68 @@ class WalkForwardEngine:
     def _aggregate(self, fold_results: list[FoldResult]) -> WalkForwardResult:
         """Build WalkForwardResult from completed fold results."""
 
+        # Collect warnings
+        all_warnings: list[str] = []
+
+        # Failed folds (empty NAV window / refit crash) carry NaN metrics
+        # and must be excluded from all aggregates — never averaged in.
+        ok_folds = [fr for fr in fold_results if fr.fold_status == "ok"]
+        failed_folds = [fr for fr in fold_results if fr.fold_status != "ok"]
+        if failed_folds:
+            failed_ids = ", ".join(str(fr.fold.fold_id) for fr in failed_folds)
+            all_warnings.append(
+                f"{len(failed_folds)}/{len(fold_results)} folds FAILED "
+                f"(ids: {failed_ids}) — excluded from aggregate metrics"
+            )
+            logger.warning(f"[WalkForward] {all_warnings[-1]}")
+
         # Concatenate OOS returns
-        oos_returns_list = [fr.oos_returns for fr in fold_results if not fr.oos_returns.empty]
+        oos_returns_list = [fr.oos_returns for fr in ok_folds if not fr.oos_returns.empty]
+        if oos_returns_list:
+            combined_index = pd.concat(oos_returns_list).index
+            if combined_index.duplicated().any():
+                # Mirror the aggregation.py log warning into the result's
+                # warnings so it survives into summary() output.
+                all_warnings.append(
+                    "Overlapping OOS windows (step < test): duplicated dates "
+                    "are averaged across folds, which can bias the composite "
+                    "Sharpe upward; prefer step_months >= test_months"
+                )
         oos_returns, oos_nav = aggregate_oos_returns(oos_returns_list)
 
         # Composite metrics from concatenated returns
-        composite = compute_composite_metrics(
-            oos_returns, risk_free_rate=self._risk_free_rate
-        )
+        if oos_returns.empty:
+            nan = float("nan")
+            composite = {"sharpe": nan, "cagr": nan, "max_dd": nan, "volatility": nan}
+        else:
+            composite = compute_composite_metrics(
+                oos_returns, risk_free_rate=self._risk_free_rate
+            )
 
-        # Overfit diagnostics
-        is_sharpes = [fr.is_sharpe for fr in fold_results]
-        oos_sharpes = [fr.oos_sharpe for fr in fold_results]
-        is_cagrs = [fr.is_cagr for fr in fold_results]
-        oos_cagrs = [fr.oos_cagr for fr in fold_results]
+        # Bootstrap CI for the composite Sharpe (stationary block
+        # bootstrap, seeded from config.seed for reproducibility).
+        sharpe_ci = None
+        if not oos_returns.empty:
+            sharpe_ci = bootstrap_sharpe_ci(
+                oos_returns,
+                seed=self._config.seed,
+                risk_free_rate=self._risk_free_rate,
+            )
 
-        or_val = aggregate_overfit_ratio(is_sharpes, oos_sharpes)
-        eff_val = aggregate_efficiency(is_cagrs, oos_cagrs)
-        decay = sharpe_decay(oos_sharpes)
+        # Overfit diagnostics (ok folds only)
+        is_sharpes = [fr.is_sharpe for fr in ok_folds]
+        oos_sharpes = [fr.oos_sharpe for fr in ok_folds]
+        is_cagrs = [fr.is_cagr for fr in ok_folds]
+        oos_cagrs = [fr.oos_cagr for fr in ok_folds]
 
-        # Collect warnings
-        all_warnings = []
+        if ok_folds:
+            or_val = aggregate_overfit_ratio(is_sharpes, oos_sharpes)
+            eff_val = aggregate_efficiency(is_cagrs, oos_cagrs)
+            decay = sharpe_decay(oos_sharpes)
+        else:
+            or_val = float("nan")
+            eff_val = float("nan")
+            decay = float("nan")
 
         # ── Deflated Sharpe Ratio (Bailey & López de Prado 2014) ──────
         # Candidate: the aggregated OOS daily return series (T, skew, raw
@@ -325,8 +367,21 @@ class WalkForwardEngine:
         # daily units of the candidate.  No optimizer → N = 1 → the DSR
         # honestly reduces to the PSR of the OOS Sharpe.  Folds are NOT
         # trials and are never used as the trial population.
+        #
+        # Mode caveats:
+        # - slice_diagnostics: the "OOS" series is an in-sample slice of
+        #   one full-period run — DSR would bless in-sample performance,
+        #   so it is reported as unavailable (None) with a reason.
+        # - per_fold_refit: the concatenated OOS series spans folds with
+        #   potentially DIFFERENT best_params. The DSR then measures the
+        #   whole tune-then-trade process, not one fixed parameterization.
         dsr_val = None
-        if self._config.compute_deflated_sharpe and len(oos_returns) >= 3:
+        dsr_reason = None
+        if self.mode == "slice_diagnostics":
+            dsr_reason = (
+                "in-sample; DSR not meaningful without independent trials"
+            )
+        elif self._config.compute_deflated_sharpe and len(oos_returns) >= 3:
             ret_std = float(oos_returns.std(ddof=1))
             if ret_std > 0.0:
                 ann = math.sqrt(252.0)
@@ -337,12 +392,12 @@ class WalkForwardEngine:
 
                 pooled_trials = [
                     v / ann
-                    for fr in fold_results
+                    for fr in ok_folds
                     for v in (fr.optimizer_trial_values or [])
                     if v is not None and np.isfinite(v)
                 ]
                 optimizer_used = any(
-                    fr.optimizer_n_evals for fr in fold_results if fr.optimizer_n_evals
+                    fr.optimizer_n_evals for fr in ok_folds if fr.optimizer_n_evals
                 )
                 if optimizer_used and not pooled_trials:
                     all_warnings.append(
@@ -409,7 +464,7 @@ class WalkForwardEngine:
         neg_folds = sum(1 for s in oos_sharpes if s < self._config.min_oos_sharpe)
         if neg_folds > 0:
             all_warnings.append(
-                f"{neg_folds}/{len(fold_results)} folds have OOS Sharpe "
+                f"{neg_folds}/{len(ok_folds)} folds have OOS Sharpe "
                 f"below {self._config.min_oos_sharpe}"
             )
 
@@ -433,10 +488,13 @@ class WalkForwardEngine:
             oos_max_dd=composite["max_dd"],
             oos_returns=oos_returns,
             oos_nav=oos_nav,
+            sharpe_ci_5pct=sharpe_ci[0] if sharpe_ci is not None else None,
+            sharpe_ci_95pct=sharpe_ci[1] if sharpe_ci is not None else None,
             overfit_ratio=or_val,
             efficiency=eff_val,
             sharpe_decay=decay,
             deflated_sharpe=dsr_val,
+            deflated_sharpe_reason=dsr_reason,
             pbo=pbo_val,
             pbo_available=pbo_val is not None,
             pbo_reason=pbo_reason,

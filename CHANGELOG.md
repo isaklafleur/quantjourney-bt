@@ -1,5 +1,13 @@
 # QuantJourney Backtester Changelog
 
+## 0.8.9 - 2026-07-08
+
+### Changed
+- Weight-mode accounting now books the full price move across missing-data gaps on the resume bar (matching order-mode economics), and gapped positions are reported at their carried value.
+- Honest walk-forward reporting: slice-diagnostics output is labeled in-sample end-to-end, failed folds are reported as failed (not zero Sharpe), verdicts are gated so losing strategies never render green, and the composite Sharpe carries a bootstrap confidence interval.
+- Stricter, louder input handling: unknown constructor kwargs raise, execution mode and fill timing are validated, missing OHLC data degrades with a clear warning, inactive configuration knobs warn once per mode, and the tracking-error trigger activates when `benchmark_returns` is provided.
+- Re-running a backtest on the same instance is idempotent (execution state resets per run); weekly calendar rebalances snap to the prior trading day on holidays; documentation now spells out the execution-timing contract and calendar-convention sensitivity.
+
 ## 0.8.8 - 2026-07-08
 
 ### Changed

@@ -30,6 +30,11 @@ class MetricVerdict:
 
 
 # ── Threshold table (walk-forward diagnostic heuristics) ─────────────
+#
+# NOTE: these thresholds are heuristic rules of thumb, not calibrated
+# statistical tests. Boundaries (1.5, 0.7, -0.01, …) are conventions
+# from practitioner literature — treat verdicts as indicative, never
+# as formal inference.
 
 _THRESHOLDS = {
     "overfit_ratio": {
@@ -81,6 +86,16 @@ _THRESHOLDS = {
 }
 
 
+# Verdicts for these metrics are meaningless when the strategy loses
+# out-of-sample: overfit_ratio(-1.2, -0.8) = 0.0 and a rising Sharpe
+# slope on an always-losing strategy would otherwise render green.
+_GATED_ON_OOS_SHARPE = ("overfit_ratio", "sharpe_decay")
+
+# Below this fold count, fold-derived verdicts are indicative only.
+_MIN_FOLDS_FOR_VERDICT = 6
+_LOW_FOLD_METRICS = ("pbo", "sharpe_decay")
+
+
 def _classify(metric_name: str, value: float) -> tuple[Signal, str]:
     """Return (signal, description) for a metric."""
     t = _THRESHOLDS.get(metric_name)
@@ -103,6 +118,13 @@ def interpret_metrics(
     Args:
         metrics: dict with keys like ``overfit_ratio``, ``efficiency``,
                  ``sharpe_decay``, ``deflated_sharpe``, ``pbo``, ``breakeven_bps``.
+                 Context keys (no verdict of their own, used to gate the
+                 others): ``composite_sharpe`` / ``oos_sharpe`` — the
+                 aggregate OOS Sharpe; when <= 0, overfit_ratio and
+                 sharpe_decay verdicts are forced red (a losing strategy
+                 must never look "robust" or "stable"). ``n_folds`` —
+                 when < 6, pbo and sharpe_decay descriptions are tagged
+                 "(low fold count — indicative only)".
 
     Returns:
         List of ``MetricVerdict`` (one per metric that has a threshold).
@@ -110,6 +132,15 @@ def interpret_metrics(
         per-trial OOS evaluation) are skipped and must be rendered as
         "n/a" by callers, never as a green verdict.
     """
+    oos_sr = metrics.get("composite_sharpe", metrics.get("oos_sharpe"))
+    losing = (
+        oos_sr is not None
+        and not (isinstance(oos_sr, float) and math.isnan(oos_sr))
+        and oos_sr <= 0.0
+    )
+    n_folds = metrics.get("n_folds")
+    low_folds = n_folds is not None and n_folds < _MIN_FOLDS_FOR_VERDICT
+
     verdicts = []
     for name, value in metrics.items():
         if name not in _THRESHOLDS:
@@ -118,6 +149,21 @@ def interpret_metrics(
             continue
         if isinstance(value, float) and math.isnan(value):
             continue
-        signal, desc = _classify(name, value)
+        if name in _GATED_ON_OOS_SHARPE and losing:
+            signal: Signal = "red"
+            desc = (
+                "OOS Sharpe <= 0 — strategy loses out-of-sample; "
+                f"{name} verdict suppressed (never green on a losing strategy)"
+            )
+        elif name == "overfit_ratio" and value < 0.0:
+            # IS Sharpe negative while OOS Sharpe positive: the ratio is
+            # not interpretable — never let a negative ratio pass < 1.5
+            # and render green.
+            signal = "yellow"
+            desc = "ratio < 0 — IS Sharpe negative; overfit ratio not interpretable"
+        else:
+            signal, desc = _classify(name, value)
+        if low_folds and name in _LOW_FOLD_METRICS:
+            desc = f"{desc} (low fold count — indicative only)"
         verdicts.append(MetricVerdict(name=name, value=value, signal=signal, description=desc))
     return verdicts

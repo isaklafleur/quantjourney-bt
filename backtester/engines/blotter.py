@@ -17,7 +17,7 @@ Licensed under the Apache License 2.0.
 
 import pandas as pd
 from dataclasses import dataclass, field
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 import uuid
 from enum import Enum
 import os
@@ -35,6 +35,17 @@ class Blotter:
 
 	trades: List[Dict[str, Any]] = field(default_factory=list)
 	orders: List[Dict[str, Any]] = field(default_factory=list)
+
+	def reset(self) -> None:
+		"""
+		Clear all recorded orders and trades (per-run state).
+
+		Runners that reuse a Backtester / Blotter instance across runs
+		must call this at run start so trade ledgers do not accumulate
+		across runs.
+		"""
+		self.trades = []
+		self.orders = []
 
 	@error_logger("Error recording order")
 	def record_order(
@@ -91,8 +102,8 @@ class Blotter:
 		timestamp: pd.Timestamp,
 		transaction_cost: float = 0.0,
 		slippage: float = 0.0,
-		theoretical_price: float | None = None,
-		fill_status: str | None = None,
+		theoretical_price: Optional[float] = None,
+		fill_status: Optional[str] = None,
 		trade_id: str = None,
 	) -> None:
 		"""
@@ -107,9 +118,9 @@ class Blotter:
 			trade_value (float): Total value of the trade.
 			timestamp (pd.Timestamp): Time when the trade was executed.
 			transaction_cost (float): Transaction cost associated with the trade.
-			slippage (float): Slippage cost or price impact recorded by the fill engine.
-			theoretical_price (float | None): Reference price before slippage.
-			fill_status (str | None): Fill status reported by the execution engine.
+			slippage (float): Absolute slippage per unit/share/contract.
+			theoretical_price (float): Pre-slippage fill price, when available.
+			fill_status (str): Fill status from the execution engine.
 			trade_id (str): Unique identifier for the trade.
 		"""
 		if trade_id is None:
@@ -206,10 +217,13 @@ class Blotter:
 				- Quantity
 				- Price
 				- TradeValue
-				Optional columns:
+		Optional columns:
 				- OrderID (generated if missing)
 				- TradeID (generated if missing)
 				- TransactionCost (defaults to 0.0)
+				- Slippage (defaults to 0.0)
+				- TheoreticalPrice (defaults to Price)
+				- FillStatus (defaults to None)
 		"""
 		required_columns = ['Timestamp', 'Instrument', 'Side', 'Quantity', 'Price', 'TradeValue']
 		if not all(col in trades_df.columns for col in required_columns):
@@ -234,6 +248,12 @@ class Blotter:
 
 		if 'TransactionCost' not in trades_df.columns:
 			trades_df['TransactionCost'] = 0.0
+		if 'Slippage' not in trades_df.columns:
+			trades_df['Slippage'] = 0.0
+		if 'TheoreticalPrice' not in trades_df.columns:
+			trades_df['TheoreticalPrice'] = trades_df['Price']
+		if 'FillStatus' not in trades_df.columns:
+			trades_df['FillStatus'] = None
 
 		# Convert DataFrame to list of dictionaries
 		trade_records = trades_df.to_dict('records')
@@ -249,7 +269,10 @@ class Blotter:
 				"Quantity": record['Quantity'],
 				"Price": record['Price'],
 				"TradeValue": record['TradeValue'],
-				"TransactionCost": record['TransactionCost']
+				"TransactionCost": record['TransactionCost'],
+				"Slippage": record.get('Slippage', 0.0),
+				"TheoreticalPrice": record.get('TheoreticalPrice', record['Price']),
+				"FillStatus": record.get('FillStatus')
 			}
 			for record in trade_records
 		]

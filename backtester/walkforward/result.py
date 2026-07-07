@@ -67,6 +67,11 @@ class FoldResult:
     sanity_warnings: List[str] = field(default_factory=list)
     fingerprint: str = ""
 
+    # "ok" or "failed". A failed fold (empty NAV window, refit crash)
+    # carries NaN metrics — never silent zeros — and is excluded from
+    # engine aggregates.
+    fold_status: str = "ok"
+
     # Optimization (None when no optimizer is used)
     best_params: Optional[Dict[str, Any]] = None
     optimizer_n_evals: Optional[int] = None
@@ -100,12 +105,17 @@ class WalkForwardResult:
     oos_max_dd: float = 0.0
     oos_returns: Optional[pd.Series] = None
     oos_nav: Optional[pd.Series] = None
+    # Stationary-block-bootstrap CI for the composite Sharpe
+    # (seeded from WalkForwardConfig.seed; see statistics.aggregation).
+    sharpe_ci_5pct: Optional[float] = None
+    sharpe_ci_95pct: Optional[float] = None
 
     # ── Overfitting diagnostics ──
     overfit_ratio: float = 0.0
     efficiency: float = 0.0
     sharpe_decay: float = 0.0
     deflated_sharpe: Optional[float] = None  # probability in [0, 1]
+    deflated_sharpe_reason: Optional[str] = None  # why DSR is unavailable (when None)
     pbo: Optional[float] = None
     pbo_available: bool = False
     pbo_reason: Optional[str] = None  # why PBO is unavailable (when None)
@@ -154,10 +164,13 @@ class WalkForwardResult:
             "oos_sharpe": self.oos_sharpe,
             "oos_cagr": self.oos_cagr,
             "oos_max_dd": self.oos_max_dd,
+            "sharpe_ci_5pct": self.sharpe_ci_5pct,
+            "sharpe_ci_95pct": self.sharpe_ci_95pct,
             "overfit_ratio": self.overfit_ratio,
             "efficiency": self.efficiency,
             "sharpe_decay": self.sharpe_decay,
             "deflated_sharpe": self.deflated_sharpe,
+            "deflated_sharpe_reason": self.deflated_sharpe_reason,
             "pbo": self.pbo,
             "pbo_available": self.pbo_available,
             "pbo_reason": self.pbo_reason,
@@ -183,6 +196,7 @@ class WalkForwardResult:
                 "overfit_ratio": fr.overfit_ratio,
                 "efficiency": fr.efficiency,
                 "best_params": fr.best_params,
+                "fold_status": fr.fold_status,
             })
         d["folds"] = fold_summaries
 
@@ -199,13 +213,33 @@ class WalkForwardResult:
         scheme = self.config_dict.get("scheme", "?")
         train_m = self.config_dict.get("train_months", "?")
         test_m = self.config_dict.get("test_months", "?")
+        slice_mode = self.mode == "slice_diagnostics"
+        failed = [fr for fr in self.folds if fr.fold_status != "ok"]
 
+        if slice_mode:
+            lines.append("=" * 80)
+            lines.append("IN-SAMPLE SLICE DIAGNOSTICS (not out-of-sample)")
+            lines.append(
+                "All metrics below are slices of ONE full-period run — NOT "
+                "out-of-sample evidence."
+            )
+            lines.append(
+                "Pass backtester_factory to WalkForwardEngine for honest "
+                "per-fold refit OOS."
+            )
+            lines.append("=" * 80)
         lines.append(
             f"Walk-Forward Analysis — {self.n_folds} folds "
             f"({scheme}, {train_m}m/{test_m}m)"
         )
         lines.append(f"Fingerprint: {self.fingerprint[:12]}")
         lines.append(f"Mode: {self.mode}")
+        if failed:
+            failed_ids = ", ".join(str(fr.fold.fold_id) for fr in failed)
+            lines.append(
+                f"⚠ {len(failed)}/{self.n_folds} FOLDS FAILED "
+                f"(ids: {failed_ids}) — excluded from aggregates"
+            )
         lines.append("")
 
         # Per-fold table
@@ -224,23 +258,41 @@ class WalkForwardResult:
                 f"{fr.fold.oos_start.strftime('%Y-%m')} → "
                 f"{fr.fold.oos_end.strftime('%Y-%m')}"
             )
+            failed_tag = "  ← FAILED" if fr.fold_status != "ok" else ""
             lines.append(
                 f"{fr.fold.fold_id:>4} │ {is_period:<23} │ "
                 f"{fr.is_sharpe:>9.2f} │ {oos_period:<23} │ "
-                f"{fr.oos_sharpe:>10.2f}"
+                f"{fr.oos_sharpe:>10.2f}{failed_tag}"
             )
 
         lines.append("─" * 80)
-        lines.append("AGGREGATE OOS")
-        lines.append(f"  Composite OOS Sharpe: {self.oos_sharpe:>8.2f}    "
+        if slice_mode:
+            lines.append("AGGREGATE (IN-SAMPLE SLICES — not OOS)")
+            sr_label = "Composite Sharpe (IS slice):"
+            cagr_label = "CAGR (IS slice):    "
+            dd_label = "Max DD (IS slice):  "
+        else:
+            lines.append("AGGREGATE OOS")
+            sr_label = "Composite OOS Sharpe:       "
+            cagr_label = "OOS CAGR:           "
+            dd_label = "OOS Max DD:         "
+        ci_str = ""
+        if self.sharpe_ci_5pct is not None and self.sharpe_ci_95pct is not None:
+            ci_str = (
+                f" [5%: {self.sharpe_ci_5pct:.2f}, "
+                f"95%: {self.sharpe_ci_95pct:.2f}]"
+            )
+        lines.append(f"  {sr_label} {self.oos_sharpe:.2f}{ci_str}")
+        lines.append(f"  {cagr_label}  {self.oos_cagr:>7.1%}    "
                       f"Overfit Ratio: {self.overfit_ratio:.2f}")
-        lines.append(f"  OOS CAGR:             {self.oos_cagr:>7.1%}    "
+        lines.append(f"  {dd_label}  {self.oos_max_dd:>7.1%}    "
                       f"Efficiency:    {self.efficiency:.2f}")
-        lines.append(f"  OOS Max DD:           {self.oos_max_dd:>7.1%}    "
-                      f"Sharpe Decay:  {self.sharpe_decay:+.3f}/fold")
+        lines.append(f"  Sharpe Decay:         {self.sharpe_decay:+.3f}/fold")
 
         if self.deflated_sharpe is not None:
             lines.append(f"  Deflated Sharpe (prob):{self.deflated_sharpe:>7.2f}")
+        elif self.deflated_sharpe_reason:
+            lines.append(f"  Deflated Sharpe:      n/a ({self.deflated_sharpe_reason})")
         pbo_render = f"{self.pbo:.2f}" if self.pbo is not None else "n/a"
         lines.append(f"  PBO:                  {pbo_render:>8}")
         if self.pbo is None and self.pbo_reason:

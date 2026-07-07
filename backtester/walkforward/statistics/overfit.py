@@ -27,6 +27,12 @@ def overfit_ratio(is_sharpe: float, oos_sharpe: float) -> float:
     > 1.5 → caution,  > 2.5 → likely overfit.
     Returns inf if OOS Sharpe ≤ 0 and IS Sharpe > 0.
     Returns 0.0 if both are ≤ 0.
+
+    NOTE: the value is NOT interpretable when OOS Sharpe ≤ 0 (0.0 does
+    not mean "robust" — it means "losing everywhere") or when IS Sharpe
+    < 0 (negative ratio). ``interpret_metrics`` gates its verdict on the
+    aggregate OOS Sharpe for exactly this reason — pass it as
+    ``composite_sharpe`` in the metrics dict.
     """
     if oos_sharpe <= 0:
         return float("inf") if is_sharpe > 0 else 0.0
@@ -51,6 +57,11 @@ def sharpe_decay(oos_sharpes: Sequence[float]) -> float:
 
     Negative slope → alpha is decaying over time.
     Returns 0.0 if fewer than 2 folds.
+
+    NOTE: a positive slope is NOT evidence of health when the strategy
+    loses money — e.g. sharpe_decay([-2, -1.5, -1, -0.5]) = +0.5
+    ("improving") for an always-losing strategy. ``interpret_metrics``
+    gates its verdict on the aggregate OOS Sharpe (``composite_sharpe``).
     """
     n = len(oos_sharpes)
     if n < 2:

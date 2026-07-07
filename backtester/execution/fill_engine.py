@@ -73,6 +73,16 @@ class FillEngine:
 
     Bracket orders are decomposed into an entry order + OCO pair (TP + SL).
     OCO logic: when one order in a pair fills, the other is cancelled.
+
+    Per-run state and ``reset()``:
+        A FillEngine instance accumulates per-run state — pending orders,
+        order/fill histories, OCO registries, and per-order commission
+        state. Re-running a backtest on the SAME engine instance without
+        clearing this state changes results (e.g. an order left pending at
+        the end of run 1 fills at the first bar of run 2, and audit
+        histories accumulate across runs). Runners that reuse a Backtester
+        / FillEngine instance MUST call ``reset()`` at the start of each
+        run, before any orders are submitted.
     """
 
     def __init__(
@@ -100,6 +110,30 @@ class FillEngine:
         self._last_fill_by_instrument: Dict[str, Fill] = {}
         self._last_fill_by_order: Dict[str, Fill] = {}
         self._commission_state_by_order: Dict[str, Dict[str, float]] = {}
+
+    # ── Reset ──────────────────────────────────────────────────────────
+
+    def reset(self) -> None:
+        """
+        Clear all per-run state so the engine can start a fresh backtest run.
+
+        Clears pending orders, OCO pair registries, order/fill histories,
+        last-fill caches, and per-order commission state. Configuration
+        (slippage, commission, fill_at, max_volume_participation,
+        notional_fn) is preserved.
+
+        Runners that reuse a Backtester / FillEngine instance across runs
+        MUST call this at run start — otherwise orders left pending by the
+        previous run fill on the new run's first bar and audit histories
+        accumulate across runs.
+        """
+        self._orders = defaultdict(list)
+        self._oco_pairs = {}
+        self._order_history = []
+        self._fill_history = []
+        self._last_fill_by_instrument = {}
+        self._last_fill_by_order = {}
+        self._commission_state_by_order = {}
 
     # ── Submit ─────────────────────────────────────────────────────────
 

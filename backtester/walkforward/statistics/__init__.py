@@ -43,6 +43,7 @@ from backtester.walkforward.statistics.pbo import (
 )
 from backtester.walkforward.statistics.aggregation import (
     aggregate_oos_returns,
+    bootstrap_sharpe_ci,
     compute_composite_metrics,
 )
 from backtester.walkforward.statistics.interpretation import interpret_metrics
@@ -58,6 +59,7 @@ __all__ = [
     "pbo_from_selected_ranks",
     "selected_trial_logit",
     "aggregate_oos_returns",
+    "bootstrap_sharpe_ci",
     "compute_composite_metrics",
     "interpret_metrics",
 ]

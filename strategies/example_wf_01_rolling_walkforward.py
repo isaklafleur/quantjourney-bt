@@ -134,8 +134,20 @@ async def main() -> None:
         "overfit_ratio": result.overfit_ratio,
         "efficiency": result.efficiency,
         "sharpe_decay": result.sharpe_decay,
+        # Context keys (no verdicts of their own): gate the lights so a
+        # losing strategy or a tiny fold count never renders green.
+        "composite_sharpe": result.oos_sharpe,
+        "n_folds": result.n_folds,
     })
-    print("\nWalk-forward traffic lights:")
+    if result.mode == "slice_diagnostics":
+        print(
+            "\nNOTE: slice_diagnostics mode — the metrics above are IN-SAMPLE"
+            "\nslices of ONE full-period run, not out-of-sample evidence."
+            "\nSet QJ_WF_MODE=per_fold_refit for honest OOS validation."
+        )
+        print("\nWalk-forward traffic lights (IN-SAMPLE — indicative only):")
+    else:
+        print("\nWalk-forward traffic lights:")
     for v in verdicts:
         print(f"  {v}")
 

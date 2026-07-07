@@ -35,10 +35,27 @@ from backtester.portfolio.schemas import (
 class PortfolioData:
     """
     Class to store portfolio data and compute various portfolio metrics
-    
+
+    Timezone convention (important):
+        ``__post_init__`` silently converts ALL datetime indices (NAV,
+        weights, positions, cash, flags, calendar) to tz-aware UTC —
+        tz-naive input indices are localized to UTC, tz-aware ones are
+        converted. This happens even if the series you passed in was
+        tz-naive. Consequence: joining/aligning any PortfolioData series
+        (e.g. ``portfolio_data.net_asset_value``) with an external
+        tz-naive series raises
+        ``TypeError: Cannot join tz-naive with tz-aware DatetimeIndex``.
+        Remedy: strip the timezone first, e.g.
+        ``nav = pd.Series(pd_data.net_asset_value); nav.index = nav.index.tz_localize(None)``
+        (or localize your external series to UTC instead).
+
     Attributes:
         instruments (InstrumentData): InstrumentData object, containing instrument data
-        net_asset_value (pd.Series): Net Asset Value, per date
+        net_asset_value (pd.Series): Net Asset Value, per date.
+            NOTE: after construction its index is ALWAYS tz-aware UTC
+            (converted in ``__post_init__``), regardless of the timezone
+            of the series passed in. Use ``.index.tz_localize(None)`` on a
+            copy before joining with tz-naive data.
         input_weights (Optional[Union[np.ndarray, pd.DataFrame, Dict[str, float]]): Initial weights, e.g. {'AAPL': 0.5, 'MSFT': 0.5}
         rebalance_flags (Optional[pd.Series]): Rebalance flags, e.g True if rebalancing is needed
         asset_name_map (Optional[Dict[str, str]]): Asset name mapping e.g. {'AAPL': 'Apple Inc.'}
@@ -517,7 +534,7 @@ class PortfolioData:
             return instrument
         return self.asset_name_map.get(instrument, instrument)
 
-    # For split-based validation ----------------------------------------------------
+    # For CrossValidation & Walk-Forward -------------------------------------------
 
     def slice_data(self, date_range) -> "PortfolioData":
         """

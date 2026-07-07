@@ -28,6 +28,7 @@ import inspect
 import numpy as np
 import pandas as pd
 
+from backtester.utils.logger import logger
 from backtester.walkforward.folds.base import Fold
 from backtester.walkforward.result import FoldResult
 from backtester.walkforward.statistics.overfit import overfit_ratio, efficiency
@@ -38,13 +39,16 @@ class FoldRunner:
     """
     Executes a single fold: IS metrics, OOS metrics, diagnostics.
 
-    The runner does NOT call Backtester (which would re-fetch data
-    and run the full pipeline). Instead it operates on pre-computed
-    PortfolioData by slicing to IS / OOS windows and computing metrics
-    via PortfolioCalculations.
+    Without a ``backtester_factory`` the runner does NOT call Backtester
+    (which would re-fetch data and run the full pipeline). Instead it
+    operates on pre-computed PortfolioData by slicing to IS / OOS windows
+    — slice_diagnostics mode; the "OOS" slices are still in-sample.
 
-    For optimization-enabled WF (Phase 6+), the runner will accept
-    a ``backtester_factory`` and re-run the strategy per fold.
+    When a ``backtester_factory`` IS provided (per_fold_refit mode), the
+    runner re-runs the strategy per fold — optionally optimizing on the
+    IS window first — and computes metrics from that fold's own NAV.
+    See ``_build_fold_backtester`` for a leakage caveat that strategy
+    authors must respect.
     """
 
     def __init__(
@@ -71,11 +75,24 @@ class FoldRunner:
         self._pbo_trials = pbo_trials
 
     def run(self) -> FoldResult:
-        """Execute fold and return FoldResult."""
+        """Execute fold and return FoldResult (fold_status='failed' on refit crash)."""
         portfolio_data = self._portfolio_data
         opt_meta: Dict[str, Any] = {}
         if self._backtester_factory is not None:
-            portfolio_data, opt_meta = self._run_fold_refit()
+            try:
+                portfolio_data, opt_meta = self._run_fold_refit()
+            except RuntimeError as exc:
+                if "active event loop" in str(exc):
+                    raise  # usage error — caller must use run_async()
+                logger.error(
+                    f"[WalkForward] Fold {self._fold.fold_id} refit FAILED: {exc}"
+                )
+                return self._failed_result(f"refit failed: {exc}")
+            except Exception as exc:
+                logger.error(
+                    f"[WalkForward] Fold {self._fold.fold_id} refit FAILED: {exc}"
+                )
+                return self._failed_result(f"refit failed: {exc}")
 
         return self._build_result(portfolio_data, opt_meta)
 
@@ -84,7 +101,13 @@ class FoldRunner:
         portfolio_data = self._portfolio_data
         opt_meta: Dict[str, Any] = {}
         if self._backtester_factory is not None:
-            portfolio_data, opt_meta = await self._run_fold_refit_async()
+            try:
+                portfolio_data, opt_meta = await self._run_fold_refit_async()
+            except Exception as exc:
+                logger.error(
+                    f"[WalkForward] Fold {self._fold.fold_id} refit FAILED: {exc}"
+                )
+                return self._failed_result(f"refit failed: {exc}")
 
         return self._build_result(portfolio_data, opt_meta)
 
@@ -114,16 +137,34 @@ class FoldRunner:
         oos_nav = (1.0 + oos_returns).cumprod() if not oos_returns.empty else pd.Series(dtype=float)
 
         # Diagnostics
-        oos_sr = oos_metrics.get("sharpe", 0.0)
-        is_sr = is_metrics.get("sharpe", 0.0)
-        or_val = overfit_ratio(is_sr, oos_sr)
+        oos_sr = oos_metrics.get("sharpe", float("nan"))
+        is_sr = is_metrics.get("sharpe", float("nan"))
+        is_cagr = is_metrics.get("cagr", float("nan"))
+        oos_cagr = oos_metrics.get("cagr", float("nan"))
 
-        is_cagr = is_metrics.get("cagr", 0.0)
-        oos_cagr = oos_metrics.get("cagr", 0.0)
-        eff = efficiency(is_cagr, oos_cagr)
+        # Failed fold: empty/too-short NAV window → NaN metrics, never
+        # silent zeros (Sharpe 0.0 would be indistinguishable from a
+        # genuinely flat strategy).
+        fold_failed = (
+            oos_returns.empty
+            or not np.isfinite(oos_sr)
+            or not np.isfinite(is_sr)
+        )
+        if fold_failed:
+            or_val = float("nan")
+            eff = float("nan")
+        else:
+            or_val = overfit_ratio(is_sr, oos_sr)
+            eff = efficiency(is_cagr, oos_cagr)
 
         # Sanity warnings
         warnings = []
+        if fold_failed:
+            warnings.append(
+                f"Fold {self._fold.fold_id}: FAILED — empty or insufficient "
+                "NAV window; metrics are NaN and the fold is excluded from "
+                "aggregates"
+            )
         if self._backtester_factory is None:
             warnings.append(
                 f"Fold {self._fold.fold_id}: slice diagnostics mode — metrics "
@@ -146,28 +187,29 @@ class FoldRunner:
         # Fingerprint for this fold
         fp = self._compute_fold_fingerprint(is_metrics, oos_metrics)
 
+        nan = float("nan")
         return FoldResult(
             fold=self._fold,
             # IS
             is_sharpe=is_sr,
             is_cagr=is_cagr,
-            is_max_dd=is_metrics.get("max_dd", 0.0),
-            is_volatility=is_metrics.get("volatility", 0.0),
+            is_max_dd=is_metrics.get("max_dd", nan),
+            is_volatility=is_metrics.get("volatility", nan),
             is_n_trades=is_metrics.get("n_trades", 0),
-            is_win_rate=is_metrics.get("win_rate", 0.0),
-            is_profit_factor=is_metrics.get("profit_factor", 0.0),
-            is_avg_holding_days=is_metrics.get("avg_holding_days", 0.0),
-            is_turnover_ann=is_metrics.get("turnover_ann", 0.0),
+            is_win_rate=is_metrics.get("win_rate", nan),
+            is_profit_factor=is_metrics.get("profit_factor", nan),
+            is_avg_holding_days=is_metrics.get("avg_holding_days", nan),
+            is_turnover_ann=is_metrics.get("turnover_ann", nan),
             # OOS
             oos_sharpe=oos_sr,
             oos_cagr=oos_cagr,
-            oos_max_dd=oos_metrics.get("max_dd", 0.0),
-            oos_volatility=oos_metrics.get("volatility", 0.0),
+            oos_max_dd=oos_metrics.get("max_dd", nan),
+            oos_volatility=oos_metrics.get("volatility", nan),
             oos_n_trades=oos_metrics.get("n_trades", 0),
-            oos_win_rate=oos_metrics.get("win_rate", 0.0),
-            oos_profit_factor=oos_metrics.get("profit_factor", 0.0),
-            oos_avg_holding_days=oos_metrics.get("avg_holding_days", 0.0),
-            oos_turnover_ann=oos_metrics.get("turnover_ann", 0.0),
+            oos_win_rate=oos_metrics.get("win_rate", nan),
+            oos_profit_factor=oos_metrics.get("profit_factor", nan),
+            oos_avg_holding_days=oos_metrics.get("avg_holding_days", nan),
+            oos_turnover_ann=oos_metrics.get("turnover_ann", nan),
             # OOS time series
             oos_returns=oos_returns,
             oos_nav=oos_nav,
@@ -176,6 +218,7 @@ class FoldRunner:
             efficiency=eff,
             sanity_warnings=warnings,
             fingerprint=fp,
+            fold_status="failed" if fold_failed else "ok",
             best_params=best_params,
             optimizer_n_evals=optimizer_n_evals,
             optimizer_best_objective=optimizer_best_objective,
@@ -185,6 +228,25 @@ class FoldRunner:
         )
 
     # ── Private helpers ───────────────────────────────────────────────
+
+    def _failed_result(self, reason: str) -> FoldResult:
+        """All-NaN FoldResult with fold_status='failed' — never silent zeros."""
+        nan = float("nan")
+        empty = pd.Series(dtype=float)
+        return FoldResult(
+            fold=self._fold,
+            is_sharpe=nan, is_cagr=nan, is_max_dd=nan, is_volatility=nan,
+            is_n_trades=0, is_win_rate=nan, is_profit_factor=nan,
+            is_avg_holding_days=nan, is_turnover_ann=nan,
+            oos_sharpe=nan, oos_cagr=nan, oos_max_dd=nan, oos_volatility=nan,
+            oos_n_trades=0, oos_win_rate=nan, oos_profit_factor=nan,
+            oos_avg_holding_days=nan, oos_turnover_ann=nan,
+            oos_returns=empty, oos_nav=empty,
+            overfit_ratio=nan, efficiency=nan,
+            sanity_warnings=[f"Fold {self._fold.fold_id}: FAILED — {reason}"],
+            fingerprint=self._compute_fold_fingerprint({}, {}),
+            fold_status="failed",
+        )
 
     def _get_returns_for_window(
         self,
@@ -214,14 +276,18 @@ class FoldRunner:
 
         Uses lightweight direct computation rather than the full report pipeline.
         """
+        pdata = portfolio_data if portfolio_data is not None else self._portfolio_data
         returns = self._get_returns_for_window(start, end, portfolio_data=portfolio_data)
 
         if returns.empty or len(returns) < 2:
+            # Empty/too-short window → NaN, NOT zeros: a fabricated
+            # Sharpe of 0.0 is indistinguishable from a flat strategy.
+            nan = float("nan")
             return {
-                "sharpe": 0.0, "cagr": 0.0, "max_dd": 0.0,
-                "volatility": 0.0, "n_trades": 0, "win_rate": 0.0,
-                "profit_factor": 0.0, "avg_holding_days": 0.0,
-                "turnover_ann": 0.0,
+                "sharpe": nan, "cagr": nan, "max_dd": nan,
+                "volatility": nan, "n_trades": 0, "win_rate": nan,
+                "profit_factor": nan, "avg_holding_days": nan,
+                "turnover_ann": nan,
             }
 
         n_days = len(returns)
@@ -246,12 +312,16 @@ class FoldRunner:
         dd = (nav - running_max) / running_max
         max_dd = float(dd.min())
 
-        # Trade analytics (if blotter available)
+        # Trade analytics (if blotter available). Defaults are NaN, not
+        # 0.0 — a missing blotter must render "n/a", never a fake zero.
+        # avg_holding_days is not computed on this lightweight path at
+        # all, so it is always NaN (was: hardcoded 0.0).
+        nan = float("nan")
         n_trades = 0
-        win_rate = 0.0
-        profit_factor = 0.0
-        avg_holding_days = 0.0
-        turnover_ann = 0.0
+        win_rate = nan
+        profit_factor = nan
+        avg_holding_days = nan
+        turnover_ann = nan
 
         if self._blotter is not None:
             try:
@@ -263,6 +333,7 @@ class FoldRunner:
                         mask = (ts_col >= start) & (ts_col <= end)
                         window_trades = trades_df[mask]
                         n_trades = len(window_trades)
+                        turnover_ann = 0.0  # no trades → genuinely zero turnover
 
                         if n_trades > 0:
                             # Win rate from positive PnL trades
@@ -284,13 +355,35 @@ class FoldRunner:
                                     else float("inf")
                                 )
 
-                            # Turnover estimate
+                            # Annualized dollar turnover — unified with the
+                            # reproducibility.py definition:
+                            #   (total notional traded / 2) / avg NAV, annualized.
+                            # 1.0 = the whole portfolio replaced once per year.
                             if "dollar_amount" in window_trades.columns:
-                                total_volume = window_trades["dollar_amount"].abs().sum()
-                                turnover_ann = total_volume / self._initial_capital / max(years, 1e-9)
+                                total_notional = window_trades["dollar_amount"].abs().sum()
+                                nav_series = pdata.net_asset_value
+                                nav_window = nav_series.loc[
+                                    (nav_series.index >= start) & (nav_series.index <= end)
+                                ]
+                                avg_nav = float(nav_window.mean()) if len(nav_window) else nan
+                                turnover_ann = (
+                                    (total_notional / 2.0) / avg_nav / max(years, 1e-9)
+                                    if avg_nav and avg_nav > 0
+                                    else nan
+                                )
 
-            except Exception:
-                pass  # gracefully skip if blotter not compatible
+            except Exception as exc:
+                # Blotter incompatible with this lightweight path: report
+                # NaN (rendered n/a), never a plausible-looking zero.
+                logger.warning(
+                    f"[WalkForward] Fold {self._fold.fold_id}: trade analytics "
+                    f"failed ({exc}); trade metrics set to NaN"
+                )
+                n_trades = 0
+                win_rate = nan
+                profit_factor = nan
+                avg_holding_days = nan
+                turnover_ann = nan
 
         return {
             "sharpe": float(sharpe),
@@ -410,6 +503,15 @@ class FoldRunner:
         """λ of the IS-selected trial (top_k[0]) among candidate OOS scores."""
         if not oos_scores:
             return None
+        if not any(np.isfinite(s) for s in oos_scores):
+            # ALL candidate backtests failed (-inf): the selection "rank"
+            # would be pure noise — mark loudly as NaN, never a rank.
+            logger.warning(
+                f"[WalkForward] Fold {self._fold.fold_id}: ALL "
+                f"{len(oos_scores)} PBO candidate backtests failed — "
+                "selection rank meaningless; logit set to NaN"
+            )
+            return float("nan")
         return selected_trial_logit(oos_scores[0], oos_scores)
 
     def _oos_score_for_params(self, pdata: Any) -> float:
@@ -467,6 +569,17 @@ class FoldRunner:
         return oos_scores, self._pbo_logit_from_scores(oos_scores)
 
     def _build_fold_backtester(self, best_params: Dict[str, Any]) -> Any:
+        """
+        Instantiate the per-fold backtester over [train_start, oos_end].
+
+        LEAKAGE WARNING for strategy authors: the fold backtester runs
+        over the FULL fold window (IS + OOS). Any strategy that computes
+        full-window statistics — z-score/min-max normalization, whole-
+        sample means or volatilities, fitted scalers — leaks OOS data
+        into the IS fit even under per-fold refit. Signal features must
+        use rolling or train-only (expanding, anchored at train_start)
+        statistics for the OOS metrics to be honest.
+        """
         assert self._backtester_factory is not None
         train_start = self._fold.train_start.strftime("%Y-%m-%d")
         train_end = self._fold.effective_is_end.strftime("%Y-%m-%d")

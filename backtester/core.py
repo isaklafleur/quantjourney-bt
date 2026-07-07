@@ -229,8 +229,8 @@ class Backtester(SDKClientMixin, ReportingMixin):
         initial_capital: float = 100_000.0,
         instruments: Optional[List[str]] = None,
         backtest_period: Optional[Dict[str, str]] = None,
-        target_volatility: float = 0.15,
-        max_position_size: float = 0.10,
+        target_volatility: Optional[float] = None,
+        max_position_size: Optional[float] = None,
         indicators_config: Optional[List[Dict[str, Any]]] = None,
         # ── Reporting ──
         reports_directory: str = "./reports",
@@ -261,6 +261,8 @@ class Backtester(SDKClientMixin, ReportingMixin):
         max_volume_participation: Optional[float] = None,  # order-mode volume cap
         # ── Rebalancing ──
         rebalance_policy=None,             # RebalancePolicy instance (default: daily)
+        # ── Benchmark returns (for tracking-error rebalance trigger) ──
+        benchmark_returns: Optional[pd.Series] = None,
         # ── Risk model ──
         risk_model=None,                   # RiskModel instance (applied between weights and rebalance)
         # ── Performance flags ──
@@ -270,6 +272,30 @@ class Backtester(SDKClientMixin, ReportingMixin):
         strict_data_fetch: Optional[bool] = None,
         **kwargs,
     ):
+        # ── Reject unknown kwargs — silent swallowing hides typos like
+        # `rebalance_polcy=` and runs a materially different backtest. ──
+        if kwargs:
+            unknown = ", ".join(sorted(kwargs))
+            raise TypeError(
+                f"Backtester.__init__() got unexpected keyword argument(s): {unknown}. "
+                "Check for typos — unknown kwargs are not silently ignored."
+            )
+
+        # ── Validate + normalize execution_mode / fill_at (case-insensitive).
+        # Previously execution_mode='Orders' silently ran the WEIGHTS path and
+        # fill_at='Open' silently meant close fills. ──
+        execution_mode = str(execution_mode).strip().lower()
+        if execution_mode not in {"weights", "orders"}:
+            raise ValueError(
+                f"execution_mode must be 'weights' or 'orders' (case-insensitive), "
+                f"got {execution_mode!r}"
+            )
+        fill_at = str(fill_at).strip().lower()
+        if fill_at not in {"open", "close"}:
+            raise ValueError(
+                f"fill_at must be 'open' or 'close' (case-insensitive), got {fill_at!r}"
+            )
+
         # ── API credentials ──
         self.api_url = api_url.rstrip("/")
         self._email = email
@@ -305,8 +331,10 @@ class Backtester(SDKClientMixin, ReportingMixin):
             start=backtest_period["start"],
             end=backtest_period["end"],
         )
-        self.target_volatility = float(target_volatility)
-        self.max_position_size = float(max_position_size)
+        # target_volatility / max_position_size default to None so an EXPLICIT
+        # user setting is distinguishable from the report-metadata defaults.
+        self.target_volatility = 0.15 if target_volatility is None else float(target_volatility)
+        self.max_position_size = 0.10 if max_position_size is None else float(max_position_size)
         self.indicators_config = indicators_config or []
 
         # ── Reporting ──
@@ -358,8 +386,12 @@ class Backtester(SDKClientMixin, ReportingMixin):
             cash=self.initial_capital,
         )
 
-        # Transaction cost in bps — single source of truth
-        self.TRANSACTION_COST_BPS = 0.0001  # 1 bp
+        # Transaction cost as a FRACTION of trade value — single source of
+        # truth. NOTE: despite the legacy name this is NOT expressed in basis
+        # points: 0.0001 is the fraction equal to 1 bp. Name kept for API
+        # compatibility; do not multiply by 1e-4 again.
+        self.TRANSACTION_COST_BPS = 0.0001  # fraction = 1 bp
+        weight_cost_model_explicit = weight_cost_model is not None
         if weight_cost_model is None:
             from backtester.portfolio.weight_cost import FixedBpsWeightCostModel
             weight_cost_model = FixedBpsWeightCostModel(
@@ -400,8 +432,63 @@ class Backtester(SDKClientMixin, ReportingMixin):
         from backtester.portfolio.rebalance import RebalancePolicy
         self._rebalance_policy = rebalance_policy if rebalance_policy is not None else RebalancePolicy()
 
+        # ── Benchmark returns (used by the tracking-error rebalance trigger) ──
+        self._benchmark_returns = benchmark_returns
+
         # ── Risk model ──
         self._risk_model = risk_model  # None = no adjustment
+        if max_position_size is not None:
+            if self.execution_mode == "weights" and risk_model is None:
+                # Route the explicit cap into the existing weight-cap path so
+                # the knob is actually enforced instead of being a report label.
+                from backtester.risk.position_limit import PositionLimitModel
+                self._risk_model = PositionLimitModel(
+                    max_weight=self.max_position_size,
+                    min_weight=0.0,
+                    max_total_leverage=float("inf"),
+                )
+                logger.info(
+                    f"[Backtester] max_position_size={self.max_position_size:.2%} "
+                    "enforced via PositionLimitModel weight cap."
+                )
+            else:
+                logger.warning(
+                    "[Backtester] max_position_size accepted for report metadata "
+                    "only — not enforced (orders mode or custom risk_model supplied)."
+                )
+        if target_volatility is not None:
+            logger.warning(
+                "[Backtester] target_volatility accepted for report metadata "
+                "only — volatility targeting is not enforced."
+            )
+
+        # ── Per-mode ignored-knob warning (only knobs EXPLICITLY set) ──
+        ignored_knobs: List[str] = []
+        if self.execution_mode == "weights":
+            if slippage_model is not None:
+                ignored_knobs.append("slippage_model")
+            if commission_scheme is not None:
+                ignored_knobs.append("commission_scheme")
+            if fill_at != "open":
+                ignored_knobs.append("fill_at")
+            if max_volume_participation is not None:
+                ignored_knobs.append("max_volume_participation")
+            if contract_specs:
+                ignored_knobs.append("contract_specs")
+        else:
+            if weight_cost_model_explicit:
+                ignored_knobs.append("weight_cost_model")
+            if rebalance_policy is not None:
+                ignored_knobs.append("rebalance_policy")
+            if risk_model is not None:
+                ignored_knobs.append(
+                    "risk_model (weights are rewritten but the order path never reads them)"
+                )
+        if ignored_knobs:
+            logger.warning(
+                f"[Backtester] execution_mode={self.execution_mode!r} ignores "
+                f"configured knob(s): {', '.join(ignored_knobs)}"
+            )
 
         # ── Universe (lazy-initialized on first access) ──
         self._universe = None
@@ -665,7 +752,12 @@ class Backtester(SDKClientMixin, ReportingMixin):
         nav: float,
     ) -> None:
         """
-        Submit orders to self.fill_engine for the current bar.
+        Submit orders to self.fill_engine after the current bar closes.
+
+        NOTE next-bar semantics: pending orders are processed against a bar
+        BEFORE _compute_orders() is called for that bar, so an order
+        submitted here is filled on the NEXT bar at the earliest (market
+        orders at the next bar's open/close per ``fill_at``).
 
         Override this in your strategy when using execution_mode="orders".
         Called once per bar with OHLCV data and current position state.
@@ -969,6 +1061,13 @@ class Backtester(SDKClientMixin, ReportingMixin):
 
         pos = self.position(instrument)
         if abs(pos) <= 1e-12:
+            if self.has_open_orders(instrument):
+                logger.warning(
+                    f"[Backtester] stop_loss({instrument!r}) called with no open "
+                    "position but a pending order for that instrument — the stop "
+                    "was NOT placed. Use bracket_percent() to attach protective "
+                    "exits to an entry order."
+                )
             return None
         if quantity is None:
             quantity = abs(pos)
@@ -1009,6 +1108,13 @@ class Backtester(SDKClientMixin, ReportingMixin):
 
         pos = self.position(instrument)
         if abs(pos) <= 1e-12:
+            if self.has_open_orders(instrument):
+                logger.warning(
+                    f"[Backtester] take_profit({instrument!r}) called with no open "
+                    "position but a pending order for that instrument — the "
+                    "take-profit was NOT placed. Use bracket_percent() to attach "
+                    "protective exits to an entry order."
+                )
             return None
         if quantity is None:
             quantity = abs(pos)
@@ -1145,7 +1251,11 @@ class Backtester(SDKClientMixin, ReportingMixin):
         close = self.instruments_data.get_feature("adj_close")
         returns = self._compute_returns_preserve_gaps(close)
 
-        adjusted = self._risk_model.adjust(weights, returns)
+        # Pass the sector map so sector_limits in PositionLimitModel (which
+        # require metadata={"sectors": {instrument: sector}}) can actually fire.
+        sector_map = getattr(self, "_sector_map", None)
+        metadata = {"sectors": sector_map} if sector_map else None
+        adjusted = self._risk_model.adjust(weights, returns, metadata=metadata)
 
         # Overwrite weights with risk-adjusted version
         # Drop existing weight columns first (add_strategy_data appends, not replaces)
@@ -1178,6 +1288,10 @@ class Backtester(SDKClientMixin, ReportingMixin):
         Day-by-day performance: NAV, returns, positions, trades.
         Dispatches to order-based or weight-based engine.
         """
+        # Make the benchmark_returns kwarg visible to the rebalance engine's
+        # tracking-error trigger (portfolio_data.benchmark_returns).
+        if self._benchmark_returns is not None and self.portfolio_data is not None:
+            self.portfolio_data.benchmark_returns = self._benchmark_returns
         if self.execution_mode == "orders" and self.fill_engine is not None:
             return self._compute_performance_order_based()
         return self._compute_performance_weight_based()
@@ -1189,6 +1303,12 @@ class Backtester(SDKClientMixin, ReportingMixin):
         them against OHLCV bars with slippage + commission.
         """
         from backtester.execution.order_types import BarData, OrderSide
+
+        # Re-running on the same instance must not inherit pending orders,
+        # fill history or commission state from a previous run.
+        self.fill_engine.reset()
+        if self.blotter is not None:
+            self.blotter.reset()
 
         def _is_valid_price(value: Any) -> bool:
             try:
@@ -1206,19 +1326,28 @@ class Backtester(SDKClientMixin, ReportingMixin):
         instruments = close_prices.columns.tolist()
         all_dates = close_prices.index
 
-        # Try to get full OHLCV; fall back to close for missing fields
-        try:
-            open_prices = self.instruments_data.get_feature("open")
-        except Exception:
-            open_prices = close_prices
-        try:
-            high_prices = self.instruments_data.get_feature("high")
-        except Exception:
-            high_prices = close_prices
-        try:
-            low_prices = self.instruments_data.get_feature("low")
-        except Exception:
-            low_prices = close_prices
+        # Try to get full OHLCV; fall back to close ONLY for genuinely missing
+        # fields (KeyError/AttributeError). Any other failure re-raises: a
+        # blanket fallback silently disables intrabar stop/limit detection.
+        degraded_fields: List[str] = []
+
+        def _feature_or_close(field: str) -> pd.DataFrame:
+            try:
+                return self.instruments_data.get_feature(field)
+            except (KeyError, AttributeError):
+                degraded_fields.append(field)
+                return close_prices
+
+        open_prices = _feature_or_close("open")
+        high_prices = _feature_or_close("high")
+        low_prices = _feature_or_close("low")
+        if degraded_fields and not getattr(self, "_warned_ohlc_degraded", False):
+            self._warned_ohlc_degraded = True
+            logger.warning(
+                "[Backtester] OHLC unavailable (missing: "
+                f"{', '.join(degraded_fields)}) — bars degraded to close-only; "
+                "stop/limit intrabar triggers disabled."
+            )
         try:
             volume_data = self.instruments_data.get_feature("volume")
         except Exception:
@@ -1382,6 +1511,26 @@ class Backtester(SDKClientMixin, ReportingMixin):
         return returns
 
     @staticmethod
+    def _compute_accounting_returns(prices: pd.DataFrame) -> pd.DataFrame:
+        """Returns for NAV/PnL accounting: bridge price moves across NaN gaps.
+
+        Bars INSIDE a gap (price is NaN) stay NaN, so availability masking
+        keeps the instrument un-rebalanceable while the market is dark. The
+        first bar AFTER the gap carries the bridged return
+        ``price[resume] / last_valid_price - 1`` so the whole gap move books
+        on the resume bar — matching the orders-mode convention of marking a
+        frozen position at its last valid price. Leading NaNs (instrument not
+        yet trading) remain NaN.
+        """
+        filled = prices.ffill()
+        returns = filled.pct_change(fill_method=None).mask(prices.isna())
+        if len(returns) > 0:
+            first_idx = returns.index[0]
+            first_available = prices.loc[first_idx].notna()
+            returns.loc[first_idx, first_available] = 0.0
+        return returns
+
+    @staticmethod
     def _weights_from_position_values(
         position_values: pd.DataFrame, nav: pd.Series
     ) -> pd.DataFrame:
@@ -1405,16 +1554,21 @@ class Backtester(SDKClientMixin, ReportingMixin):
         return float(quantity) * float(price) * float(spec.multiplier) * float(spec.lot_size)
 
     def _position_values_from_units(self, positions: pd.DataFrame, prices: pd.DataFrame) -> pd.DataFrame:
+        # Mark at the last valid price through NaN gaps (ffill) so reported
+        # exposure matches the NAV valuation convention: the order-mode NAV
+        # loop carries a gapped position at last_valid_price, so weights /
+        # position_values must not collapse to 0 while NAV stays invested.
+        marked_prices = prices.ffill()
         values = pd.DataFrame(0.0, index=positions.index, columns=positions.columns)
         for inst in positions.columns:
             spec = self._contract_spec(inst)
             if spec.inverse:
                 # Same negative-coin-notional convention as _signed_position_value.
                 values[inst] = -positions[inst].multiply(
-                    spec.multiplier / prices[inst].replace(0.0, np.nan)
+                    spec.multiplier / marked_prices[inst].replace(0.0, np.nan)
                 )
             else:
-                values[inst] = positions[inst].multiply(prices[inst]).multiply(
+                values[inst] = positions[inst].multiply(marked_prices[inst]).multiply(
                     float(spec.multiplier) * float(spec.lot_size)
                 )
         return values.replace([np.inf, -np.inf], np.nan).fillna(0.0)
@@ -1487,32 +1641,69 @@ class Backtester(SDKClientMixin, ReportingMixin):
         all_dates = target_weights.index
 
         raw_cash_buffer = self.portfolio_data.cash_buffer
-        # Accept int as well as float (e.g. cash_buffer=0 means "no buffer").
+        # Accept float, int (cash_buffer=0 means "no buffer") and pd.Series
+        # (per-date buffer, matching the documented Union[float, pd.Series]).
         # bool is an int subclass but True/False are never a valid buffer
         # fraction (True would mean a nonsensical 100% buffer), so bools fall
-        # through to the 5% default like any other unsupported type.
-        cash_buffer = (
-            float(raw_cash_buffer)
-            if isinstance(raw_cash_buffer, (int, float))
-            and not isinstance(raw_cash_buffer, bool)
-            else 0.05
-        )
+        # through to the 5% default (long-standing documented behaviour).
+        # Any other type raises instead of silently running with 5%.
+        if isinstance(raw_cash_buffer, pd.Series):
+            # Per-date buffer: align to the run dates, forward-fill between
+            # provided dates, default 5% before the series starts.
+            cash_buffer = (
+                pd.to_numeric(raw_cash_buffer, errors="coerce")
+                .reindex(all_dates)
+                .ffill()
+                .fillna(0.05)
+            )
+        elif raw_cash_buffer is None or isinstance(raw_cash_buffer, bool):
+            cash_buffer = 0.05
+        elif isinstance(raw_cash_buffer, (int, float, np.integer, np.floating)):
+            cash_buffer = float(raw_cash_buffer)
+        else:
+            raise TypeError(
+                "cash_buffer must be a float fraction or pd.Series indexed by "
+                f"date, got {type(raw_cash_buffer).__name__}"
+            )
 
-        # Apply cash buffer to target weights
-        target_weights_inv = target_weights * (1.0 - cash_buffer)
+        # Apply cash buffer to target weights (row-wise when per-date Series)
+        if isinstance(cash_buffer, pd.Series):
+            target_weights_inv = target_weights.multiply(1.0 - cash_buffer, axis=0)
+        else:
+            target_weights_inv = target_weights * (1.0 - cash_buffer)
 
-        # Asset returns
+        # Asset returns, two views of the same closes:
+        #   asset_returns      — gap-preserving (NaN through NaN-price gaps AND
+        #                        on the resume bar); used to detect gaps.
+        #   accounting_returns — NaN only INSIDE a gap, with the resume-bar
+        #                        return bridged across it
+        #                        (price[resume] / last_valid_price - 1).
+        # The accounting view is what NAV/PnL must book: a position frozen
+        # through a data gap realises the whole gap move on the resume bar,
+        # matching the orders-mode last-valid-price convention.
         asset_returns = self._compute_returns_preserve_gaps(close)
+        accounting_returns = self._compute_accounting_returns(close)
 
         # Benchmark returns for tracking-error trigger (if available)
-        benchmark_returns = None
-        if hasattr(self.portfolio_data, 'benchmark_returns'):
-            benchmark_returns = self.portfolio_data.benchmark_returns
+        benchmark_returns = getattr(self.portfolio_data, "benchmark_returns", None)
+        if (
+            benchmark_returns is None
+            and getattr(self._rebalance_policy, "tracking_error_threshold", None) is not None
+        ):
+            logger.warning(
+                "[Backtester] tracking_error_threshold is configured on the "
+                "rebalance policy but no benchmark_returns were provided "
+                "(Backtester(benchmark_returns=...)) — the tracking-error "
+                "trigger is INACTIVE for this run."
+            )
 
         # ── Run RebalanceEngine ──
+        # NaNs in the returns frame mark instruments as unavailable, so
+        # passing accounting_returns keeps rebalancing INTO an asset blocked
+        # during its gap while making the bridged resume-bar return visible.
         engine = RebalanceEngine(self._rebalance_policy)
         actual_weights, rebal_flags = engine.run(
-            target_weights_inv, asset_returns,
+            target_weights_inv, accounting_returns,
             benchmark_returns=benchmark_returns,
         )
 
@@ -1537,7 +1728,21 @@ class Backtester(SDKClientMixin, ReportingMixin):
         # RebalanceEngine.actual_weights is the realised/end-of-bar exposure
         # state. return_weights is the beginning-of-bar exposure used for P&L.
         return_weights = getattr(engine, "return_weights", actual_weights)
-        portfolio_returns = (return_weights * asset_returns.fillna(0.0)).sum(axis=1)
+
+        # Resume-bar correction: the engine's availability masking zeroes a
+        # gapped instrument's carried weight while its price is NaN, so the
+        # bridged resume return would otherwise apply to weight 0 and the
+        # whole gap move would vanish from NAV. Economically the position is
+        # frozen through the gap, so the weight held INTO the resume bar is
+        # the last end-of-bar weight before the gap.
+        resume_bars = accounting_returns.notna() & asset_returns.isna()
+        if bool(resume_bars.to_numpy().any()):
+            frozen_weights = (
+                actual_weights.mask(close.isna() | resume_bars).ffill().fillna(0.0)
+            )
+            return_weights = return_weights.mask(resume_bars, frozen_weights)
+
+        portfolio_returns = (return_weights * accounting_returns.fillna(0.0)).sum(axis=1)
 
         # ── Transaction costs: implied trades, only on rebalance days ──
         # Weight mode has no explicit orders, so the accounting layer infers

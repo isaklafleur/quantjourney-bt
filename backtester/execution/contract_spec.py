@@ -39,7 +39,29 @@ class AssetClass(str, Enum):
 
 @dataclass(frozen=True)
 class ContractSpec:
-    """Immutable specification for a tradeable instrument."""
+    """Immutable specification for a tradeable instrument.
+
+    Execution support status
+    ────────────────────────
+    Only a subset of these fields is actually applied by the execution /
+    accounting engine, and only in **orders mode** (via notional and
+    position-valuation math in ``core.py``):
+
+        HONORED     : ``multiplier``, ``lot_size``, ``inverse``
+        NOT APPLIED : ``tick_size`` (fills are NOT rounded to tick —
+                      ``round_price()`` is a helper the engine never calls),
+                      ``round_quantity()`` (order quantities are NOT lot-
+                      rounded by the engine),
+                      ``pip_size`` (informational only),
+                      ``quote_currency`` (no multi-currency conversion is
+                      performed),
+                      ``margin`` / ``margin_required()`` (no margin checks
+                      or margin accounting are enforced).
+
+    Weights-mode backtests do not consult ContractSpec at all. The
+    NOT-APPLIED fields are metadata plus self-service helper methods; do
+    not assume they constrain simulated fills or position sizes.
+    """
 
     symbol: str
     asset_class: AssetClass = AssetClass.EQUITY
