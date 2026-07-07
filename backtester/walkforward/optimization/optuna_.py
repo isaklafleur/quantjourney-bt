@@ -639,7 +639,12 @@ class OptunaOptimizer:
                 "backtest_period": {"start": train_start, "end": train_end},
             }
             bt = backtester_factory(**merged)
-            run_result = bt.run()
+            # Same resolution as FoldRunner: the real Backtester exposes
+            # run_strategy(), lightweight test doubles expose run().
+            runner = getattr(bt, "run_strategy", None) or getattr(bt, "run", None)
+            if runner is None:
+                raise ValueError("backtester_factory result must provide run_strategy() or run()")
+            run_result = runner()
             if inspect.isawaitable(run_result):
                 # Runs in the asyncio.to_thread worker — no active loop here.
                 asyncio.run(run_result)
