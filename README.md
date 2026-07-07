@@ -121,6 +121,10 @@ More report and chart examples at
 pip install quantjourney-bt
 ```
 
+Optional extras: `pip install "quantjourney-bt[wf]"` adds Optuna for the
+walk-forward optimization examples (WF05); `[data]` adds the yfinance
+benchmark fallback.
+
 For local development:
 
 ```bash

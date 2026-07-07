@@ -3,8 +3,7 @@ Benchmark data fetching and comparison utilities.
 
 Fetch priority:
   1. SDK warehouse API (api.quantjourney.cloud)
-  2. DataConnector (internal DB)
-  3. yfinance fallback
+  2. yfinance fallback
 
 Institutional-grade QuantJourney Backtester component.
 Designed for deterministic strategy simulation, portfolio accounting,
@@ -125,7 +124,6 @@ async def _fetch_benchmark_via_sdk(
 # ── Main entry point ───────────────────────────────────────────────────
 
 async def get_benchmark_returns(
-	data_connector,
 	returns_index: pd.DatetimeIndex,
 	symbol: str = '^GSPC',
 	start_date=None,
@@ -135,17 +133,13 @@ async def get_benchmark_returns(
 	"""
 	Fetch and process benchmark returns, aligning with the primary returns index.
 
-	Priority: SDK warehouse → DataConnector → yfinance.
+	Priority: SDK warehouse → yfinance.
 	"""
 	try:
 		# 1) SDK warehouse API
 		benchmark_data = await _fetch_benchmark_via_sdk(sdk_client, symbol, start_date, end_date)
 
-		# 2) DataConnector
-		if benchmark_data is None:
-			benchmark_data = await _get_returns_via_connector(data_connector, start_date, end_date)
-
-		# 3) yfinance fallback
+		# 2) yfinance fallback
 		if benchmark_data is None:
 			benchmark_data = await _get_returns_via_yfinance(symbol, start_date, end_date)
 
@@ -160,49 +154,6 @@ async def get_benchmark_returns(
 		return None
 	except Exception as e:
 		logger.error(f"Error processing benchmark data: {str(e)}")
-		return None
-
-
-# ── DataConnector fetch ────────────────────────────────────────────────
-
-async def _get_returns_via_connector(
-	data_connector,
-	start_date=None,
-	end_date=None,
-) -> Optional[pd.Series]:
-	"""Get SPY returns via DataConnector."""
-	if data_connector is None:
-		return None
-	try:
-		spy_data = await data_connector.indices.get_sp500_index_history(
-			ticker='^GSPC',
-			source='yfinance',
-			period_start=start_date,
-			period_end=end_date,
-			read_from_db=True,
-			write_to_db=True,
-		)
-
-		if spy_data is None or spy_data.empty:
-			return None
-
-		if spy_data.index.name == 'Date' or isinstance(spy_data.index, pd.DatetimeIndex):
-			spy_data = spy_data.reset_index()
-			spy_data = spy_data.rename(columns={'Date': 'datetime'})
-
-		if pd.api.types.is_datetime64_any_dtype(spy_data['datetime']):
-			spy_data['datetime'] = pd.to_datetime(spy_data['datetime']).dt.tz_convert('UTC').dt.tz_localize(None)
-
-		spy_data = spy_data.set_index('datetime')
-		price = _select_benchmark_price(spy_data, source="DataConnector", symbol="^GSPC")
-		if price is None:
-			return None
-		returns = _price_to_returns(price)
-		logger.info(f"Fetched {len(returns)} benchmark data points from DataConnector.")
-		return returns
-
-	except Exception as e:
-		logger.warning(f"DataConnector benchmark fetch failed: {e}")
 		return None
 
 

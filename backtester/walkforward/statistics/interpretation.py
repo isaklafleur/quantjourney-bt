@@ -28,7 +28,7 @@ class MetricVerdict:
     description: str
 
 
-# ── Threshold table (from ADR-002 §7) ────────────────────────────────
+# ── Threshold table (walk-forward diagnostic heuristics) ─────────────
 
 _THRESHOLDS = {
     "overfit_ratio": {

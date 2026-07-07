@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "quantjourney-bt"
-version = "0.1.0"
+version = "0.8.6"
 description = "Python-native backtesting engine for reproducible portfolio and order-based strategy research"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -55,6 +55,7 @@ dev = [
 ]
 data = ["yfinance>=0.2"]
 reports = ["scipy>=1.11", "seaborn>=0.13"]
+wf = ["optuna>=3.0"]
 
 [project.urls]
 Homepage = "https://backtester.quantjourney.cloud"
