@@ -18,6 +18,14 @@ assumptions, costs, slippage, rebalancing rules, crisis behavior, walk-forward
 validation, optimization diagnostics, metrics, plots, and run metadata from
 one repeatable run.
 
+## Installation
+
+```bash
+pip install quantjourney-bt
+```
+
+The public package supports Python 3.11 and newer.
+
 ## Why It Exists
 
 Most backtests stop at `signal x returns`. That is fast, but it hides the
