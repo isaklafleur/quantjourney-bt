@@ -48,7 +48,7 @@ class RiskParityMultiAsset(Backtester):
     def _compute_signals(self) -> pd.DataFrame:
         close = self.instruments_data.get_feature("adj_close")
         signals = pd.DataFrame(0.0, index=close.index, columns=close.columns)
-        signals.iloc[self.WARMUP:] = 1.0
+        signals.iloc[self.WARMUP :] = 1.0
         return signals
 
     def _compute_weights(self) -> pd.DataFrame:

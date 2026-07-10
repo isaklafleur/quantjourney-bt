@@ -75,9 +75,9 @@ async def main() -> None:
         max_position_size=0.40,
         rebalance_policy=RebalancePolicy(
             frequency="BQE",
-            tracking_error_threshold=0.06,   # rebalance early if annualized TE vs benchmark > 6%
+            tracking_error_threshold=0.06,  # rebalance early if annualized TE vs benchmark > 6%
             tracking_error_window=63,
-            max_annual_turnover=4.0,         # cost gate: cap rolling 252d turnover at 4x
+            max_annual_turnover=4.0,  # cost gate: cap rolling 252d turnover at 4x
         ),
         indicators_config=[],
         benchmark_symbol="SPY",

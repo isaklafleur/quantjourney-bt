@@ -71,9 +71,9 @@ async def main() -> None:
         max_position_size=0.35,
         rebalance_policy=RebalancePolicy(
             frequency="D",
-            drift_threshold=0.10,      # only act when a weight drifts >10% from target
+            drift_threshold=0.10,  # only act when a weight drifts >10% from target
             drift_type="absolute",
-            partial_rebalance=True,    # trade only the drifted names
+            partial_rebalance=True,  # trade only the drifted names
         ),
         indicators_config=[],
         benchmark_symbol="^GSPC",

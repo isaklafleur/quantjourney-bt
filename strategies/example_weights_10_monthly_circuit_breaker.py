@@ -67,7 +67,7 @@ async def main() -> None:
         max_position_size=0.30,
         rebalance_policy=RebalancePolicy(
             frequency="BME",
-            max_drawdown_trigger=0.15,        # flatten if drawdown exceeds 15%
+            max_drawdown_trigger=0.15,  # flatten if drawdown exceeds 15%
             max_drawdown_action="flatten",
             circuit_breaker_cooldown_days=10,  # wait 10 trading days before re-engaging
         ),
