@@ -9,7 +9,7 @@ Example Orders 04 - Limit Trend Pullback
 Mode: orders.
 Order type: LIMIT.
 Idea: in an uptrend, wait for a 1% pullback before entering.
-Universe: five large-cap stocks.
+Universe: three predeclared liquid ETFs: SPY, QQQ and IWM.
 
 If close is above SMA(50), the strategy places a limit buy below the close.
 Once long, it places a 4% limit take-profit and exits at market if trend fails.
@@ -95,8 +95,10 @@ async def main() -> None:
         **_credentials(),
         strategy_name="ExampleOrders04_LimitTrendPullback",
         initial_capital=100_000,
-        instruments=["AAPL", "MSFT", "NVDA", "GOOGL", "AMZN"],
-        backtest_period={"start": "2020-01-01", "end": "2025-01-01"},
+        instruments=["SPY", "QQQ", "IWM"],
+        backtest_period={"start": "2001-01-03", "end": "2026-01-01"},
+        benchmark_symbol="SPY",
+        benchmark_name="SPDR S&P 500 ETF Trust",
         source="yfinance",
         execution_mode="orders",
         max_position_size=0.20,

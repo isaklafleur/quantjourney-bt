@@ -10,9 +10,7 @@ Mode: weights.
 Idea: a daily-updated momentum tilt across large-caps, but instead of fully
 rebalancing every day, only trade the positions that have drifted outside a
 10% band — a partial rebalance that keeps turnover low.
-Universe: five large-cap stocks.
-Rebalance: daily calendar, drift band (L2a) + partial_rebalance (only trade the
-drifted names, leave the rest untouched).
+Universe: canonical US sector ETFs: XLB, XLE, XLF, XLI, XLK, XLP, XLU, XLV and XLY.
 
 This demonstrates partial rebalancing: the difference between snapping the whole
 book to target every day (high turnover) and only correcting the positions that
@@ -64,8 +62,10 @@ async def main() -> None:
         strategy_name="ExampleWeights12_DailyPartialDrift",
         strategy_type="Long / Cash",
         initial_capital=100_000,
-        instruments=["AAPL", "MSFT", "NVDA", "GOOGL", "AMZN"],
-        backtest_period={"start": "2015-01-01", "end": "2025-01-01"},
+        instruments=["XLB", "XLE", "XLF", "XLI", "XLK", "XLP", "XLU", "XLV", "XLY"],
+        backtest_period={"start": "2000-01-03", "end": "2026-01-01"},
+        benchmark_symbol="SPY",
+        benchmark_name="SPDR S&P 500 ETF Trust",
         source="yfinance",
         execution_mode="weights",
         max_position_size=0.35,
@@ -76,8 +76,6 @@ async def main() -> None:
             partial_rebalance=True,  # trade only the drifted names
         ),
         indicators_config=[],
-        benchmark_symbol="^GSPC",
-        benchmark_name="S&P 500 Index",
         show_text_reports=True,
         save_text_reports=True,
         save_portfolio_plots=True,

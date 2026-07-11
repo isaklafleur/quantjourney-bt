@@ -9,6 +9,7 @@ Example Weights 23 - FX Time-Series Momentum
 Mode: weights (price-return research proxy).
 Idea: trade each USD-quoted spot-FX pair in the direction of its six-month
 momentum and scale active signals by inverse 63-day volatility.
+Universe: EURUSD, GBPUSD, AUDUSD and NZDUSD provider spot-FX proxies.
 
 This example tests FX data and portfolio logic. Weights mode does not model
 standard lots, FX margin, rollover/swap points, bid/ask spread, or conversion
@@ -74,13 +75,13 @@ async def main() -> None:
         strategy_type="Long / Short FX Proxy",
         initial_capital=500_000,
         instruments=["EURUSD=X", "GBPUSD=X", "AUDUSD=X", "NZDUSD=X"],
-        backtest_period={"start": "2010-01-01", "end": "2026-01-01"},
+        backtest_period={"start": "2010-01-04", "end": "2026-01-01"},
+        benchmark_symbol="DX-Y.NYB",
+        benchmark_name="US Dollar Index",
         source="yfinance",
         execution_mode="weights",
         rebalance_policy=RebalancePolicy(frequency="BME"),
         indicators_config=[],
-        benchmark_symbol="DX-Y.NYB",
-        benchmark_name="US Dollar Index",
         show_text_reports=True,
         save_text_reports=True,
         save_portfolio_plots=True,

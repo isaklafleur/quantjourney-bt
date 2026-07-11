@@ -4,6 +4,8 @@
 #
 # Usage:
 #   ./strategy.sh example_weights_01_sma_daily
+#   ./strategy.sh --all --output ./reports
+#   ./strategy.sh --all --check
 #   ./strategy.sh example_weights_01_sma_daily --sample-data
 #   ./strategy.sh example_weights_01_sma_daily --quiet
 #   ./strategy.sh example_weights_01_sma_daily --no-reports
@@ -47,9 +49,11 @@ RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'; CYAN='\033[0;36m'; NC
 
 usage() {
     local status="${1:-1}"
-    echo -e "${CYAN}Usage:${NC} $0 <strategy_name> [options] | --list"
+    echo -e "${CYAN}Usage:${NC} $0 <strategy_name> [options] | --all [options] | --list"
     echo ""
     echo "  Run a strategy:        $0 example_weights_01_sma_daily"
+    echo "  Run all sequentially:  $0 --all --output ./reports"
+    echo "  Check all imports:     $0 --all --check"
     echo "  Demo without API key:  $0 example_weights_01_sma_daily --sample-data"
     echo "  Import check only:     $0 example_weights_01_sma_daily --check"
     echo "  Quiet final summary:   $0 example_weights_01_sma_daily --quiet"
@@ -58,6 +62,7 @@ usage() {
     echo "  List strategies:       $0 --list"
     echo ""
     echo -e "${YELLOW}Options:${NC}"
+    echo "      --all              Run every strategies/example_*.py sequentially"
     echo "      --check            Import the strategy module without running a backtest"
     echo "      --sample-data      Run against deterministic bundled sample data; no API key required"
     echo "  -q, --quiet            Hide INFO output and text report; keep final summary"
@@ -97,6 +102,116 @@ list_strategies() {
     done
 }
 
+parse_batch_args() {
+    BATCH_OUTPUT_ROOT="${QJ_OUTPUT_DIR:-./reports}"
+    BATCH_CHECK_ONLY=false
+    BATCH_SAMPLE_DATA=false
+
+    while [ $# -gt 0 ]; do
+        case "$1" in
+            --check)
+                BATCH_CHECK_ONLY=true
+                shift
+                ;;
+            --sample-data)
+                BATCH_SAMPLE_DATA=true
+                shift
+                ;;
+            -q|--quiet|--no-reports|--debug)
+                shift
+                ;;
+            -o|--output)
+                if [ $# -lt 2 ] || [ -z "$2" ]; then
+                    echo -e "${RED}Error:${NC} --output requires a non-empty directory"
+                    usage 1
+                fi
+                BATCH_OUTPUT_ROOT="$2"
+                shift 2
+                ;;
+            --output=*)
+                BATCH_OUTPUT_ROOT="${1#*=}"
+                if [ -z "$BATCH_OUTPUT_ROOT" ]; then
+                    echo -e "${RED}Error:${NC} --output requires a non-empty directory"
+                    usage 1
+                fi
+                shift
+                ;;
+            --log-level|--dpi)
+                [ $# -lt 2 ] && usage 1
+                shift 2
+                ;;
+            --help|-h)
+                usage 0
+                ;;
+            *)
+                echo -e "${RED}Error:${NC} Unknown option for --all: $1"
+                usage 1
+                ;;
+        esac
+    done
+}
+
+run_all_strategies() {
+    local batch_args=("$@")
+    local batch_id batch_dir logs_dir summary_file
+    local total=0 passed=0 failed=0
+    local strategy_file strategy_name log_file status exit_code started_at duration
+
+    parse_batch_args "${batch_args[@]}"
+
+    if [ "$BATCH_CHECK_ONLY" != true ] && [ "$BATCH_SAMPLE_DATA" != true ] \
+        && [ -z "${QJ_API_KEY:-}" ] \
+        && { [ -z "${QJ_EMAIL:-}" ] || [ -z "${QJ_PASSWORD:-}" ]; }; then
+        echo -e "${RED}Error:${NC} No credentials set. Export QJ_API_KEY or QJ_EMAIL + QJ_PASSWORD."
+        echo -e "For a credential-free batch, run: ${GREEN}$0 --all --sample-data${NC}"
+        return 1
+    fi
+
+    batch_id="$(date -u +%Y%m%dT%H%M%SZ)"
+    batch_dir="${BATCH_OUTPUT_ROOT%/}/_batch/${batch_id}"
+    logs_dir="$batch_dir/logs"
+    summary_file="$batch_dir/summary.tsv"
+    mkdir -p "$logs_dir"
+    printf 'strategy\tstatus\texit_code\tduration_seconds\tlog\n' > "$summary_file"
+
+    echo -e "${GREEN}Running all strategies sequentially${NC}"
+    echo -e "${CYAN}Output root:${NC} $BATCH_OUTPUT_ROOT"
+    echo -e "${CYAN}Batch logs:${NC} $batch_dir"
+    echo ""
+
+    for strategy_file in "$STRATEGIES_DIR"/example_*.py; do
+        [ -f "$strategy_file" ] || continue
+        strategy_name="$(basename "$strategy_file" .py)"
+        log_file="$logs_dir/${strategy_name}.log"
+        total=$((total + 1))
+        started_at="$(date +%s)"
+
+        echo -e "${CYAN}[$total] START${NC} $strategy_name"
+        if "$SCRIPT_DIR/strategy.sh" "$strategy_name" "${batch_args[@]}" > "$log_file" 2>&1; then
+            status="passed"
+            exit_code=0
+            passed=$((passed + 1))
+            echo -e "${GREEN}[$total] PASS${NC}  $strategy_name"
+        else
+            exit_code=$?
+            status="failed"
+            failed=$((failed + 1))
+            echo -e "${RED}[$total] FAIL${NC}  $strategy_name (exit $exit_code; $log_file)"
+        fi
+
+        duration=$(( $(date +%s) - started_at ))
+        printf '%s\t%s\t%s\t%s\t%s\n' \
+            "$strategy_name" "$status" "$exit_code" "$duration" "$log_file" \
+            >> "$summary_file"
+    done
+
+    echo ""
+    echo -e "${CYAN}Batch complete:${NC} total=$total passed=$passed failed=$failed"
+    echo -e "${CYAN}Summary:${NC} $summary_file"
+
+    [ "$failed" -eq 0 ]
+}
+
 # ── args ─────────────────────────────────────────────────────────────
 [ $# -lt 1 ] && usage 1
 
@@ -107,6 +222,12 @@ fi
 if [ "$1" = "--list" ] || [ "$1" = "-l" ]; then
     list_strategies
     exit 0
+fi
+
+if [ "$1" = "--all" ]; then
+    shift
+    run_all_strategies "$@"
+    exit $?
 fi
 
 STRATEGY_NAME="$1"

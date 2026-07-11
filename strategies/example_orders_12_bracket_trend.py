@@ -9,7 +9,7 @@ Example Orders 12 - Bracket Trend
 Mode: orders.
 Order type: BRACKET.
 Idea: enter on SMA trend and attach take-profit plus stop-loss exits.
-Universe: five large technology stocks.
+Universe: three predeclared liquid ETFs: SPY, QQQ and IWM.
 
 The bracket parent enters at market. The engine then activates a limit
 take-profit and a stop-loss as an OCO pair.
@@ -96,8 +96,10 @@ async def main() -> None:
         **_credentials(),
         strategy_name="ExampleOrders12_BracketTrend",
         initial_capital=100_000,
-        instruments=["AAPL", "MSFT", "NVDA", "GOOGL", "AMZN"],
-        backtest_period={"start": "2020-01-01", "end": "2025-01-01"},
+        instruments=["SPY", "QQQ", "IWM"],
+        backtest_period={"start": "2001-01-03", "end": "2026-01-01"},
+        benchmark_symbol="SPY",
+        benchmark_name="SPDR S&P 500 ETF Trust",
         source="yfinance",
         execution_mode="orders",
         max_position_size=0.25,

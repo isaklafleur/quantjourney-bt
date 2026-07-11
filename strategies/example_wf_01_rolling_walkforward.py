@@ -10,7 +10,7 @@ Mode: weights + walk-forward.
 Idea: run a normal SMA(50/200) trend strategy, then validate its temporal
 robustness with a ROLLING walk-forward (fixed-length train and test windows
 that slide forward), with purge/embargo gaps.
-Universe: five large US technology stocks.
+Universe: canonical US sector ETFs: XLB, XLE, XLF, XLI, XLK, XLP, XLU, XLV and XLY.
 
 What this teaches: in-sample performance is not out-of-sample performance.
 Walk-forward slices the NAV into successive train/test windows and reports how
@@ -81,8 +81,10 @@ def _build_strategy(
         strategy_name=strategy_name,
         strategy_type="Long / Cash",
         initial_capital=100_000,
-        instruments=["AAPL", "MSFT", "NVDA", "GOOGL", "AMZN"],
-        backtest_period=backtest_period or {"start": "2012-01-01", "end": "2025-01-01"},
+        instruments=["XLB", "XLE", "XLF", "XLI", "XLK", "XLP", "XLU", "XLV", "XLY"],
+        backtest_period=backtest_period or {"start": "2000-01-03", "end": "2026-01-01"},
+        benchmark_symbol="SPY",
+        benchmark_name="SPDR S&P 500 ETF Trust",
         source="yfinance",
         execution_mode="weights",
         max_position_size=0.25,
@@ -90,8 +92,6 @@ def _build_strategy(
         indicators_config=[
             {"function": "SMA", "price_cols": ["close"], "params": {"periods": [50, 200]}},
         ],
-        benchmark_symbol="^GSPC",
-        benchmark_name="S&P 500 Index",
         show_text_reports=False,
         save_text_reports=save_packet,
         save_portfolio_plots=save_packet,
@@ -118,7 +118,6 @@ async def main() -> None:
         def factory(*, fold, train_start, train_end, oos_start, oos_end, **_) -> SMATrendForWF:
             return _build_strategy(
                 strategy_name=f"ExampleWF01_RollingWalkForward_Fold{fold.fold_id:02d}",
-                backtest_period={"start": train_start, "end": oos_end},
             )
 
         engine_kwargs["backtester_factory"] = factory

@@ -103,6 +103,7 @@ sdist compare/README.md
 sdist docs/public_scope.md
 sdist docs/release.md
 sdist docs/ROADMAP.md
+sdist docs/strategy-results/README.md
 sdist LICENSE
 sdist MANIFEST.in
 sdist pyproject.toml

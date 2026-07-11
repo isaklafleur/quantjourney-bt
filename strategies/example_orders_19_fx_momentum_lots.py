@@ -11,6 +11,7 @@ Order type: MARKET.
 Idea: trade four USD-quoted spot-FX pairs in the direction of six-month
 momentum. Position size is an integer number of standard lots, constrained by
 ATR risk and a per-pair notional cap.
+Universe: EURUSD, GBPUSD, AUDUSD and NZDUSD provider spot-FX proxies.
 
 The ContractSpec is supplied automatically by ``/bt/prepare``: one unit means
 one 100,000-base-currency lot. Current accounting does not enforce FX margin,
@@ -146,14 +147,14 @@ async def main() -> None:
         strategy_type="Long / Short FX",
         initial_capital=1_000_000,
         instruments=["EURUSD=X", "GBPUSD=X", "AUDUSD=X", "NZDUSD=X"],
-        backtest_period={"start": "2010-01-01", "end": "2026-01-01"},
+        backtest_period={"start": "2010-01-04", "end": "2026-01-01"},
+        benchmark_symbol="DX-Y.NYB",
+        benchmark_name="US Dollar Index",
         source="yfinance",
         execution_mode="orders",
         indicators_config=[],
         slippage_model=FixedBpsSlippage(bps=0.5),
         commission_scheme=FixedBpsCommission(bps=0.1),
-        benchmark_symbol="DX-Y.NYB",
-        benchmark_name="US Dollar Index",
         show_text_reports=True,
         save_text_reports=True,
         save_portfolio_plots=True,

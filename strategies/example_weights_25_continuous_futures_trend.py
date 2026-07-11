@@ -9,6 +9,7 @@ Example Weights 25 - Continuous Futures Trend Proxy
 Mode: weights (price-return research proxy).
 Idea: diversified long/short trend following over equity index, rates, energy,
 metals, and grains, with inverse-volatility weights.
+Universe: MES, MNQ, ZN, CL, GC and ZC provider continuous-futures proxies.
 
 Yahoo symbols ending in ``=F`` are provider-managed continuous series. This
 example does not select dated contracts, control the roll rule, book roll
@@ -77,13 +78,13 @@ async def main() -> None:
         strategy_type="Long / Short Futures Proxy",
         initial_capital=1_000_000,
         instruments=["MES=F", "MNQ=F", "ZN=F", "CL=F", "GC=F", "ZC=F"],
-        backtest_period={"start": "2010-01-01", "end": "2026-01-01"},
+        backtest_period={"start": "2019-05-06", "end": "2026-01-01"},
+        benchmark_symbol="SPY",
+        benchmark_name="SPDR S&P 500 ETF Trust",
         source="yfinance",
         execution_mode="weights",
         rebalance_policy=RebalancePolicy(frequency="BME"),
         indicators_config=[],
-        benchmark_symbol="SPY",
-        benchmark_name="S&P 500 ETF",
         show_text_reports=True,
         save_text_reports=True,
         save_portfolio_plots=True,

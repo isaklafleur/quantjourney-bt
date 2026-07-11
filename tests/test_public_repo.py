@@ -370,6 +370,19 @@ def test_strategy_launcher_lists_docstring_titles() -> None:
     assert "# Copyright" not in completed.stdout
 
 
+def test_strategy_launcher_documents_batch_mode() -> None:
+    completed = subprocess.run(
+        ["./strategy.sh", "--help"],
+        cwd=ROOT,
+        check=True,
+        text=True,
+        capture_output=True,
+    )
+
+    assert "--all --output ./reports" in completed.stdout
+    assert "--all --check" in completed.stdout
+
+
 def test_package_excludes_internal_report_modules() -> None:
     forbidden_paths = [
         "backtester/engines/pdf_creation.py",

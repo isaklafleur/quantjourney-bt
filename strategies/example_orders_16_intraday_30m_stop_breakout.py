@@ -11,8 +11,7 @@ Order type: STOP.
 Idea: on 30-minute bars, place buy-stop orders above the recent 12-bar high so
 entries only trigger on confirmed intraday breakouts. Positions are held for a
 fixed number of bars and then exited at market.
-Universe: four liquid large-caps.
-Granularity: 30m intraday data (yfinance keeps ~60 days of 30m history).
+Universe: three predeclared liquid ETFs: SPY, QQQ and IWM.
 
 Timeframe-grid note: at 30m the session has ~13 bars, so a 12-bar high is
 roughly a prior-session breakout. The buy-stop waits for price confirmation and
@@ -116,17 +115,17 @@ async def main() -> None:
         strategy_name="ExampleOrders16_IntradayStopBreakout30m",
         strategy_type="Intraday Breakout",
         initial_capital=100_000,
-        instruments=["AAPL", "MSFT", "NVDA", "AMZN"],
-        backtest_period=_recent_period(days=55),
-        source="yfinance",
+        instruments=["SPY", "QQQ", "IWM"],
+        backtest_period={"start": "2026-05-16", "end": "2026-07-11"},
         granularity="30m",
+        benchmark_symbol="SPY",
+        benchmark_name="SPDR S&P 500 ETF Trust",
+        source="yfinance",
         execution_mode="orders",
         max_position_size=0.25,
         indicators_config=[],
         slippage_model=FixedBpsSlippage(bps=2.0),
         commission_scheme=PerShareCommission(cost_per_share=0.005, min_per_order=1.0),
-        benchmark_symbol="QQQ",
-        benchmark_name="Nasdaq 100 ETF",
         show_text_reports=True,
         save_text_reports=True,
         save_portfolio_plots=True,

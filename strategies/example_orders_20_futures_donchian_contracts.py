@@ -11,6 +11,7 @@ Order type: MARKET.
 Idea: a diversified 55-day Donchian breakout across index, energy, and metal
 futures. Orders are whole contracts sized by ATR risk, gross notional, and the
 reference initial margin carried in ContractSpec.
+Universe: MES, MNQ, CL and GC provider continuous-futures proxies.
 
 Yahoo ``=F`` data are provider-managed continuous series. The order engine
 honors contract multipliers for sizing and PnL, but it does not yet select
@@ -156,7 +157,9 @@ async def main() -> None:
         strategy_type="Long / Short Futures",
         initial_capital=2_000_000,
         instruments=["MES=F", "MNQ=F", "CL=F", "GC=F"],
-        backtest_period={"start": "2010-01-01", "end": "2026-01-01"},
+        backtest_period={"start": "2019-05-06", "end": "2026-01-01"},
+        benchmark_symbol="SPY",
+        benchmark_name="SPDR S&P 500 ETF Trust",
         source="yfinance",
         execution_mode="orders",
         indicators_config=[],
@@ -167,8 +170,6 @@ async def main() -> None:
             min_per_order=2.50,
             max_pct=0.0,
         ),
-        benchmark_symbol="SPY",
-        benchmark_name="S&P 500 ETF",
         show_text_reports=True,
         save_text_reports=True,
         save_portfolio_plots=True,

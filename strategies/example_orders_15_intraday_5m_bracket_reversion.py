@@ -10,8 +10,7 @@ Mode: orders.
 Order type: BRACKET.
 Idea: on 5-minute bars, buy oversold RSI(14) dips and wrap each entry in a
 tight intraday bracket (+0.6% take-profit / -0.4% stop-loss).
-Universe: three liquid mega-caps.
-Granularity: 5m intraday data (yfinance keeps ~60 days of 5m history).
+Universe: three predeclared liquid ETFs: SPY, QQQ and IWM.
 
 Timeframe-grid note: the 5m cadence is the sweet spot for intraday
 mean-reversion — long enough for RSI to be meaningful, short enough for several
@@ -98,10 +97,12 @@ async def main() -> None:
         strategy_name="ExampleOrders15_IntradayBracketReversion5m",
         strategy_type="Intraday Mean Reversion",
         initial_capital=100_000,
-        instruments=["AAPL", "MSFT", "NVDA"],
-        backtest_period=_recent_period(days=30),
-        source="yfinance",
+        instruments=["SPY", "QQQ", "IWM"],
+        backtest_period={"start": "2026-06-10", "end": "2026-07-11"},
         granularity="5m",
+        benchmark_symbol="SPY",
+        benchmark_name="SPDR S&P 500 ETF Trust",
+        source="yfinance",
         execution_mode="orders",
         max_position_size=0.25,
         indicators_config=[
@@ -109,8 +110,6 @@ async def main() -> None:
         ],
         slippage_model=FixedBpsSlippage(bps=2.0),
         commission_scheme=PerShareCommission(cost_per_share=0.005, min_per_order=1.0),
-        benchmark_symbol="QQQ",
-        benchmark_name="Nasdaq 100 ETF",
         show_text_reports=True,
         save_text_reports=True,
         save_portfolio_plots=True,

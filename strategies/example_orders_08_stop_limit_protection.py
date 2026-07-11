@@ -9,7 +9,7 @@ Example Orders 08 - Stop-Limit Protection
 Mode: orders.
 Order types: MARKET entry, STOP_LIMIT exit.
 Idea: enter an SMA trend, then protect the downside with a stop-limit sell.
-Universe: five liquid technology stocks.
+Universe: three predeclared liquid ETFs: SPY, QQQ and IWM.
 
 A stop-limit exit avoids selling below the limit price, but it can remain
 unfilled after a gap. That fill risk is the point of this example.
@@ -97,8 +97,10 @@ async def main() -> None:
         **_credentials(),
         strategy_name="ExampleOrders08_StopLimitProtection",
         initial_capital=100_000,
-        instruments=["AAPL", "MSFT", "NVDA", "GOOGL", "AMZN"],
-        backtest_period={"start": "2020-01-01", "end": "2025-01-01"},
+        instruments=["SPY", "QQQ", "IWM"],
+        backtest_period={"start": "2001-01-03", "end": "2026-01-01"},
+        benchmark_symbol="SPY",
+        benchmark_name="SPDR S&P 500 ETF Trust",
         source="yfinance",
         execution_mode="orders",
         max_position_size=0.25,

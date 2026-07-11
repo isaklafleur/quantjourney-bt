@@ -9,7 +9,7 @@ Example Orders 13 - Bracket RSI Reversion
 Mode: orders.
 Order type: BRACKET.
 Idea: buy oversold RSI dips with a predefined reward/risk bracket.
-Universe: three liquid technology stocks.
+Universe: three predeclared liquid ETFs: SPY, QQQ and IWM.
 
 Each RSI entry uses a bracket with +4% take-profit and -2% stop-loss. This is
 a compact way to express a complete trade lifecycle in one order.
@@ -85,8 +85,10 @@ async def main() -> None:
         **_credentials(),
         strategy_name="ExampleOrders13_BracketRSIReversion",
         initial_capital=100_000,
-        instruments=["AAPL", "MSFT", "NVDA"],
-        backtest_period={"start": "2020-01-01", "end": "2025-01-01"},
+        instruments=["SPY", "QQQ", "IWM"],
+        backtest_period={"start": "2001-01-03", "end": "2026-01-01"},
+        benchmark_symbol="SPY",
+        benchmark_name="SPDR S&P 500 ETF Trust",
         source="yfinance",
         execution_mode="orders",
         max_position_size=0.25,

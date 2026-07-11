@@ -10,6 +10,7 @@ Mode: weights (dollar-neutral price-return proxy).
 Idea: rank four USD-quoted spot pairs by three-month return, go long the
 strongest base currency and short the weakest. Gross exposure is one and net
 exposure is zero before the engine's cash buffer.
+Universe: EURUSD, GBPUSD, AUDUSD and NZDUSD provider spot-FX proxies.
 
 This intentionally uses only XXX/USD pairs so every price move has the same
 directional interpretation. It does not include forward carry, swaps, FX
@@ -86,13 +87,13 @@ async def main() -> None:
         strategy_type="Market Neutral FX Proxy",
         initial_capital=500_000,
         instruments=["EURUSD=X", "GBPUSD=X", "AUDUSD=X", "NZDUSD=X"],
-        backtest_period={"start": "2010-01-01", "end": "2026-01-01"},
+        backtest_period={"start": "2010-01-04", "end": "2026-01-01"},
+        benchmark_symbol="DX-Y.NYB",
+        benchmark_name="US Dollar Index",
         source="yfinance",
         execution_mode="weights",
         rebalance_policy=RebalancePolicy(frequency="BME"),
         indicators_config=[],
-        benchmark_symbol="DX-Y.NYB",
-        benchmark_name="US Dollar Index",
         show_text_reports=True,
         save_text_reports=True,
         save_portfolio_plots=True,
