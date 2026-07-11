@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "quantjourney-bt"
-version = "0.10.0"
+version = "0.10.1"
 description = "Python-native backtesting engine for reproducible portfolio and order-based strategy research"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -43,6 +43,8 @@ dependencies = [
     "psutil>=5.9",
     "python-dateutil",
     "pydantic>=2.0",
+    "questionary>=2.0",
+    "rich>=13.7",
 ]
 
 [project.optional-dependencies]
@@ -69,6 +71,9 @@ Documentation = "https://backtester.quantjourney.cloud"
 Changelog = "https://backtester.quantjourney.cloud/changelog"
 Source = "https://github.com/QuantJourneyOrg/quantjourney-bt"
 Issues = "https://github.com/QuantJourneyOrg/quantjourney-bt/issues"
+
+[project.scripts]
+qj-bt = "backtester.cli.qj_data:main"
 
 [tool.setuptools.packages.find]
 include = ["backtester", "backtester.*"]

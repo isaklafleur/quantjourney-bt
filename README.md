@@ -136,6 +136,10 @@ The wheel installs the `backtester` library. The runnable strategy catalog and
 `strategy.sh` launcher are repository assets; clone this repository when you
 want to run or modify the examples below.
 
+The install also exposes `qj-bt data`, an unauthenticated terminal helper for
+browsing public backtester metadata such as sources, granularities, datasets,
+example universes, and the symbols referenced by those examples.
+
 Optional extras: `pip install "quantjourney-bt[wf]"` adds Optuna for the
 walk-forward optimization examples (WF05); `[data]` adds the yfinance
 benchmark fallback.
@@ -167,6 +171,33 @@ The sample dataset is intentionally small and reproducible. It is useful for
 install checks, report generation, and reading the engine flow without creating
 an account. For real market data, set QuantJourney API credentials and run the
 same strategy without `--sample-data`.
+
+## qj-bt Data Catalog
+
+Open the optional keyboard-driven browser in an interactive terminal:
+
+```bash
+qj-bt data
+```
+
+Use deterministic section commands in scripts, CI, or an agent workflow:
+
+```bash
+qj-bt data overview
+qj-bt data sources
+qj-bt data granularities
+qj-bt data datasets
+qj-bt data asset-classes
+qj-bt data universes
+qj-bt data example-symbols
+qj-bt data sources --json
+```
+
+`qj-bt data` uses the public metadata endpoints without reading or transmitting an
+API key. When no section is supplied, it opens the interactive browser only when
+stdin and stdout are attached to a terminal; otherwise it emits the overview table.
+The example-symbol index is illustrative and is not an exhaustive market-data
+availability catalog.
 
 ## Repository Layout
 
