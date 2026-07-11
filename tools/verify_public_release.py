@@ -22,13 +22,13 @@ TOP_LEVEL_SDIST = {
     "LICENSE",
     "MANIFEST.in",
     "README.md",
+    "compare/README.md",
     "pyproject.toml",
     "strategy.sh",
 }
 SDIST_ROOT_SUFFIXES = {
     "backtester": {".py", ".typed"},
     "benchmarks": {".md"},
-    "compare": {".md"},
     "docs": {".md", ".mdx"},
     "skills": {".md"},
     "strategies": {".md", ".py"},

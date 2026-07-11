@@ -8,7 +8,7 @@ recursive-include backtester/plots/theme/configs *.py
 recursive-include strategies *.py
 include strategies/README.md
 recursive-include benchmarks *.md
-recursive-include compare *.md
+include compare/README.md
 recursive-include docs *.md *.mdx
 recursive-include skills *.md
 include CHANGELOG.md
