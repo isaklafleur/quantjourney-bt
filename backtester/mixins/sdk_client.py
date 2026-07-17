@@ -182,6 +182,26 @@ class SDKClientMixin:
         Fetch market data from /bt/prepare API via the SDK client.
         Auto token refresh on 401 is handled by the SDK.
         """
+        if self._source == "minio":
+            from backtester.local_data import build_local_minio_bt_payload
+
+            self._api_response = build_local_minio_bt_payload(
+                instruments=self.instruments,
+                start=self.backtest_period.start,
+                end=self.backtest_period.end,
+                initial_nav=self.initial_capital,
+            )
+            self.session_id = self._api_response["session_id"]
+            self.dataset_id = self._api_response["dataset_id"]
+            self._validate_data_completeness_response()
+            summary = self._api_response["summary"]
+            logger.info(
+                f"[Backtester] Local MinIO data loaded: "
+                f"session={self.session_id}, dataset={self.dataset_id}, "
+                f"instruments={summary.get('instruments')}, dates={summary.get('dates')}"
+            )
+            return
+
         if self._source == "sample" or os.getenv("QJ_SAMPLE_DATA", "").strip().lower() in {
             "1",
             "true",
