@@ -9,7 +9,7 @@
       "types-python-dateutil": "2.9.0.20260518"
     }
   },
-  "error_count": 804,
+  "error_count": 809,
   "errors": [
     "[\"backtester/bt_payload.py\",\"call-overload\",\"No overload variant of \\\"where\\\" of \\\"DataFrame\\\" matches argument types \\\"DataFrame\\\", \\\"None\\\"\",\"b09e6fb53266ceb9\"]",
     "[\"backtester/bt_payload.py\",\"call-overload\",\"No overload variant of \\\"where\\\" of \\\"Series\\\" matches argument types \\\"Series[bool]\\\", \\\"None\\\"\",\"733a2948b22321da\"]",
@@ -387,6 +387,7 @@
     "[\"backtester/mixins/sdk_client.py\",\"attr-defined\",\"\\\"SDKClientMixin\\\" has no attribute \\\"_source\\\"\",\"514143ccb7e8495d\"]",
     "[\"backtester/mixins/sdk_client.py\",\"attr-defined\",\"\\\"SDKClientMixin\\\" has no attribute \\\"_source\\\"\",\"f36a57604168dace\"]",
     "[\"backtester/mixins/sdk_client.py\",\"attr-defined\",\"\\\"SDKClientMixin\\\" has no attribute \\\"_source\\\"\",\"f36a57604168dace\"]",
+    "[\"backtester/mixins/sdk_client.py\",\"attr-defined\",\"\\\"SDKClientMixin\\\" has no attribute \\\"_source\\\"\",\"f36a57604168dace\"]",
     "[\"backtester/mixins/sdk_client.py\",\"attr-defined\",\"\\\"SDKClientMixin\\\" has no attribute \\\"api_url\\\"\",\"87a9b9eac6c06da3\"]",
     "[\"backtester/mixins/sdk_client.py\",\"attr-defined\",\"\\\"SDKClientMixin\\\" has no attribute \\\"api_url\\\"\",\"87a9b9eac6c06da3\"]",
     "[\"backtester/mixins/sdk_client.py\",\"attr-defined\",\"\\\"SDKClientMixin\\\" has no attribute \\\"backtest_period\\\"\",\"432a34608c59538f\"]",
@@ -394,6 +395,10 @@
     "[\"backtester/mixins/sdk_client.py\",\"attr-defined\",\"\\\"SDKClientMixin\\\" has no attribute \\\"backtest_period\\\"\",\"432a34608c59538f\"]",
     "[\"backtester/mixins/sdk_client.py\",\"attr-defined\",\"\\\"SDKClientMixin\\\" has no attribute \\\"backtest_period\\\"\",\"432a34608c59538f\"]",
     "[\"backtester/mixins/sdk_client.py\",\"attr-defined\",\"\\\"SDKClientMixin\\\" has no attribute \\\"backtest_period\\\"\",\"432a34608c59538f\"]",
+    "[\"backtester/mixins/sdk_client.py\",\"attr-defined\",\"\\\"SDKClientMixin\\\" has no attribute \\\"backtest_period\\\"\",\"432a34608c59538f\"]",
+    "[\"backtester/mixins/sdk_client.py\",\"attr-defined\",\"\\\"SDKClientMixin\\\" has no attribute \\\"backtest_period\\\"\",\"432a34608c59538f\"]",
+    "[\"backtester/mixins/sdk_client.py\",\"attr-defined\",\"\\\"SDKClientMixin\\\" has no attribute \\\"initial_capital\\\"\",\"f16c216e99cb0bcf\"]",
+    "[\"backtester/mixins/sdk_client.py\",\"attr-defined\",\"\\\"SDKClientMixin\\\" has no attribute \\\"instruments\\\"\",\"600c21759ef1c2f2\"]",
     "[\"backtester/mixins/sdk_client.py\",\"attr-defined\",\"\\\"SDKClientMixin\\\" has no attribute \\\"instruments\\\"\",\"600c21759ef1c2f2\"]",
     "[\"backtester/mixins/sdk_client.py\",\"attr-defined\",\"\\\"SDKClientMixin\\\" has no attribute \\\"instruments\\\"\",\"600c21759ef1c2f2\"]",
     "[\"backtester/mixins/sdk_client.py\",\"attr-defined\",\"\\\"SDKClientMixin\\\" has no attribute \\\"instruments\\\"\",\"600c21759ef1c2f2\"]",
