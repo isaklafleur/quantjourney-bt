@@ -1,3 +1,9 @@
+# QuantJourney Backtester
+# Copyright (c) 2026 QuantJourney.
+# Licensed under the Apache License 2.0.
+
+"""Tests for backtester.local_data."""
+
 from __future__ import annotations
 
 from datetime import UTC, datetime
