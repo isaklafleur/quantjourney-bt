@@ -7,6 +7,18 @@ Compare SCTRMomentumRegimeGated's result (run against local MinIO data)
 to the original trial's already-materialized result at
 analytics/sctr_momentum_regime_gated_pnl.
 
+Builds the SAME PIT S&P 500 instrument universe SCTRMomentumRegimeGated's
+own main() uses -- this validates what actually runs in production, not
+a loosened stand-in. Expect a real, deliberate gap against the original:
+this engine enforces point-in-time index membership (a name is only ever
+a candidate on days it was an actual index member) and the original does
+not (confirmed directly against real data -- see
+strategies/sctr_momentum_regime_gated.py's module docstring). With the
+eligibility gate temporarily disabled during development, the lag-
+corrected correlation against the original was 0.988, confirming the
+port's mechanics are correct; with the gate back on (as below), a lower
+number here reflects that intentional methodological choice, not a bug.
+
 Manual/integration use only -- requires QJ_LOCAL_LAKE_* pointed at a
 running local MinIO with the datasets described in
 docs/superpowers/specs/2026-07-16-minio-local-data-sctr-backtest-design.md.
@@ -19,7 +31,7 @@ Usage:
 import asyncio
 from datetime import UTC, date, datetime
 
-from backtester.local_lake import read_pit, sctr_features_ticker_universe
+from backtester.local_lake import pit_sp500_ticker_universe, read_pit
 from backtester.local_validation import compare_return_series
 from backtester.portfolio.weight_cost import FixedBpsWeightCostModel
 from strategies.sctr_momentum_regime_gated import SCTRMomentumRegimeGated
@@ -28,7 +40,7 @@ from strategies.sctr_momentum_regime_gated import SCTRMomentumRegimeGated
 async def main() -> None:
     as_of = datetime.now(UTC)
     start_date, end_date = date(2016, 1, 1), as_of.date()
-    instruments = sctr_features_ticker_universe(start_date, end_date, as_of=as_of)
+    instruments = pit_sp500_ticker_universe(start_date, end_date, as_of=as_of)
 
     strategy = SCTRMomentumRegimeGated(
         strategy_name="SCTRMomentumRegimeGated_validation",

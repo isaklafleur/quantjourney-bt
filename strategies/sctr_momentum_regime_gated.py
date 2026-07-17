@@ -22,19 +22,24 @@ force-liquidated and no new entries are taken; re-entry is immediate and
 automatic the first day the trend flips back up, with no added
 hysteresis on the gate itself.
 
-Universe: every ticker with a research/sctr_features row (sctr_features_
-ticker_universe), NOT a PIT S&P 500 membership reconstruction. Verified
+Universe: PIT S&P 500 membership (pit_sp500_ticker_universe +
+eligibility, from processed/index_membership) -- a name is only ever an
+entry/hold candidate on days it was an actual index member, no
+look-ahead. This is a deliberate methodological choice: verified
 directly against the original strategy's own asset code and real data
-(comparing actual daily holdings between the two engines on
-2016-03-11, the first trade day in both): the original never applies a
-separate index-membership filter at runtime -- it trades whatever
-sctr_features covers, which is not identical to processed/index_membership
-(it includes names that had already left, or had not yet (re-)joined,
-the index as of a given trade date). An earlier version of this port
-gated entries on PIT S&P 500 membership, which excluded real trades the
-original took and drove return correlation to ~0 against the original's
-materialized result -- do not reintroduce that gate without re-checking
-against real data first.
+that the original does NOT apply this filter at runtime -- it trades
+whatever research/sctr_features covers, which includes names that had
+already left, or had not yet (re-)joined, the index as of a given trade
+date (e.g. it holds AMD on 2016-03-11, when AMD was not an S&P 500
+member per processed/index_membership -- confirmed directly). Disabling
+this engine's eligibility gate to match that behavior produces a 0.988
+correlation against the original's materialized return series
+(analytics/sctr_momentum_regime_gated_pnl) once a further 1-day
+return-labeling offset between the two engines is also accounted for
+(see validate_sctr_momentum_regime_gated.py's inline comment) -- so the
+mechanics of this port are confirmed correct, and the remaining gap
+against the original with the gate back on is this deliberate, expected
+choice to trade a proper point-in-time-correct index, not a bug.
 """
 
 from __future__ import annotations
@@ -45,7 +50,7 @@ from datetime import UTC, date, datetime
 import pandas as pd
 
 from backtester import Backtester
-from backtester.local_lake import sctr_features_ticker_universe
+from backtester.local_lake import pit_sp500_ticker_universe
 from backtester.portfolio.weight_cost import FixedBpsWeightCostModel
 
 ENTRY_THRESHOLD = 95.0
@@ -130,12 +135,12 @@ class SCTRMomentumRegimeGated(Backtester):
 
     def _compute_weights(self) -> pd.DataFrame:
         rank = self.signals
-        # No PIT S&P 500 eligibility mask here, deliberately -- see the
-        # module docstring. The original strategy never gates entries on
-        # index membership, so every name with an sctr_features row is
-        # always eligible; _build_regime_gated_weights still accepts an
-        # eligibility panel (used by its own tests), it's just all-1.0 here.
-        eligibility = pd.DataFrame(1.0, index=rank.index, columns=rank.columns)
+        # PIT S&P 500 membership gate -- deliberately kept, unlike the
+        # original strategy (see module docstring): a name is only ever an
+        # entry/hold candidate on days it was an actual index member, so
+        # the backtest can't "trade" a name it could never have legally
+        # held at the time.
+        eligibility = self.instruments_data.get_feature("parameters", level="eligibility")
         trend_down_panel = self.instruments_data.get_feature("parameters", level="spy_trend_down")
         trend_down = trend_down_panel.iloc[:, 0]  # broadcast market-wide flag -> single Series
         return _build_regime_gated_weights(
@@ -153,7 +158,7 @@ class SCTRMomentumRegimeGated(Backtester):
 async def main() -> None:
     as_of = datetime.now(UTC)
     start_date, end_date = date(2016, 1, 1), as_of.date()
-    instruments = sctr_features_ticker_universe(start_date, end_date, as_of=as_of)
+    instruments = pit_sp500_ticker_universe(start_date, end_date, as_of=as_of)
 
     strategy = SCTRMomentumRegimeGated(
         strategy_name="SCTRMomentumRegimeGated",
