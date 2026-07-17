@@ -118,3 +118,77 @@ def read_pit(
 
     sort_cols = [c for c in ("ticker", "symbol", "event_time") if c in df.columns]
     return df.sort_values(sort_cols).reset_index(drop=True)
+
+
+def resolve_pit_sp500(
+    trading_days: list[date],
+    *,
+    as_of: datetime,
+    index_name: str = "sp500",
+    filesystem: Any = None,
+    root: str | None = None,
+) -> dict[date, set[str]]:
+    """Map each trading day to the set of tickers that were S&P 500
+    members on that day, PIT-resolved as of `as_of`.
+
+    A symbol is a member on `day` if some membership row has
+    `event_time <= day` and (`opt_out` is null or `opt_out > day`).
+    Keyed by `symbol` alone for PIT resolution (not `symbol, event_time`)
+    -- a symbol's own event_time/opt_out facts are fixed regardless of
+    how many times the source dataset gets rewritten wholesale.
+    """
+    membership = read_pit(
+        "processed",
+        "index_membership",
+        as_of=as_of,
+        pit_keys=("symbol",),
+        filesystem=filesystem,
+        root=root,
+    )
+    if membership.empty:
+        return {day: set() for day in trading_days}
+    membership = membership[membership["index_name"] == index_name]
+
+    result: dict[date, set[str]] = {}
+    for day in trading_days:
+        day_ts = pd.Timestamp(day, tz="UTC")
+        active = membership[
+            (membership["event_time"] <= day_ts)
+            & (membership["opt_out"].isna() | (membership["opt_out"] > day_ts))
+        ]
+        result[day] = set(active["symbol"].tolist())
+    return result
+
+
+def pit_sp500_ticker_universe(
+    start: date,
+    end: date,
+    *,
+    as_of: datetime,
+    index_name: str = "sp500",
+    filesystem: Any = None,
+    root: str | None = None,
+) -> list[str]:
+    """The union of every ticker that was an S&P 500 member at any point
+    in [start, end], PIT-resolved as of `as_of`. Used to build the
+    instrument list passed to Backtester.__init__ -- day-by-day
+    eligibility is enforced separately, via resolve_pit_sp500."""
+    membership = read_pit(
+        "processed",
+        "index_membership",
+        as_of=as_of,
+        pit_keys=("symbol",),
+        filesystem=filesystem,
+        root=root,
+    )
+    if membership.empty:
+        return []
+    membership = membership[membership["index_name"] == index_name]
+
+    start_ts = pd.Timestamp(start, tz="UTC")
+    end_ts = pd.Timestamp(end, tz="UTC")
+    active = membership[
+        (membership["event_time"] <= end_ts)
+        & (membership["opt_out"].isna() | (membership["opt_out"] >= start_ts))
+    ]
+    return sorted(active["symbol"].unique().tolist())

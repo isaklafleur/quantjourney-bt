@@ -12,7 +12,7 @@ import pyarrow as pa
 import pyarrow.fs as pafs
 import pyarrow.parquet as pq
 
-from backtester.local_lake import read_pit
+from backtester.local_lake import pit_sp500_ticker_universe, read_pit, resolve_pit_sp500
 
 
 def _write_parquet(root, dataset: str, rows: list[dict]) -> None:
@@ -162,3 +162,96 @@ def test_read_pit_returns_empty_frame_when_nothing_matches(tmp_path):
     )
 
     assert df.empty
+
+
+def test_resolve_pit_sp500_add_remove_readd(tmp_path):
+    rows = [
+        {
+            "symbol": "AAA", "name": "AAA Inc", "index_name": "sp500",
+            "opt_out": None,
+            "event_time": datetime(2020, 1, 1, tzinfo=UTC),
+            "knowledge_time": datetime(2020, 1, 1, tzinfo=UTC),
+        },
+        {
+            "symbol": "BBB", "name": "BBB Inc", "index_name": "sp500",
+            "opt_out": datetime(2021, 6, 1, tzinfo=UTC),
+            "event_time": datetime(2019, 1, 1, tzinfo=UTC),
+            "knowledge_time": datetime(2019, 1, 1, tzinfo=UTC),
+        },
+        {
+            "symbol": "CCC", "name": "CCC Inc", "index_name": "nasdaq100",
+            "opt_out": None,
+            "event_time": datetime(2020, 1, 1, tzinfo=UTC),
+            "knowledge_time": datetime(2020, 1, 1, tzinfo=UTC),
+        },
+    ]
+    _write_parquet(tmp_path, "index_membership", rows)
+
+    days = [date(2020, 6, 1), date(2021, 7, 1)]
+    result = resolve_pit_sp500(
+        days,
+        as_of=datetime(2024, 1, 1, tzinfo=UTC),
+        filesystem=pafs.LocalFileSystem(),
+        root=str(tmp_path),
+    )
+
+    assert result[date(2020, 6, 1)] == {"AAA", "BBB"}
+    assert result[date(2021, 7, 1)] == {"AAA"}  # BBB opted out 2021-06-01; CCC is nasdaq100, not sp500
+
+
+def test_pit_sp500_ticker_universe_union_excludes_names_that_left_before_window(tmp_path):
+    rows = [
+        {
+            "symbol": "AAA", "name": "AAA Inc", "index_name": "sp500",
+            "opt_out": None,
+            "event_time": datetime(2020, 1, 1, tzinfo=UTC),
+            "knowledge_time": datetime(2020, 1, 1, tzinfo=UTC),
+        },
+        {
+            "symbol": "BBB", "name": "BBB Inc", "index_name": "sp500",
+            "opt_out": datetime(2019, 6, 1, tzinfo=UTC),
+            "event_time": datetime(2015, 1, 1, tzinfo=UTC),
+            "knowledge_time": datetime(2015, 1, 1, tzinfo=UTC),
+        },
+    ]
+    _write_parquet(tmp_path, "index_membership", rows)
+
+    tickers = pit_sp500_ticker_universe(
+        date(2020, 1, 1),
+        date(2020, 12, 31),
+        as_of=datetime(2024, 1, 1, tzinfo=UTC),
+        filesystem=pafs.LocalFileSystem(),
+        root=str(tmp_path),
+    )
+
+    assert tickers == ["AAA"]  # BBB opted out 2019-06-01, before the 2020 window started
+
+
+def test_resolve_pit_sp500_dedupes_repeated_snapshot_rewrites(tmp_path):
+    # index_membership gets rewritten wholesale on each source run; a
+    # symbol appears at multiple knowledge_time values with the same
+    # event_time/opt_out facts -- only the freshest copy should count.
+    rows = [
+        {
+            "symbol": "AAA", "name": "AAA Inc", "index_name": "sp500",
+            "opt_out": None,
+            "event_time": datetime(2020, 1, 1, tzinfo=UTC),
+            "knowledge_time": datetime(2020, 1, 1, tzinfo=UTC),
+        },
+        {
+            "symbol": "AAA", "name": "AAA Inc", "index_name": "sp500",
+            "opt_out": None,
+            "event_time": datetime(2020, 1, 1, tzinfo=UTC),
+            "knowledge_time": datetime(2020, 6, 1, tzinfo=UTC),
+        },
+    ]
+    _write_parquet(tmp_path, "index_membership", rows)
+
+    result = resolve_pit_sp500(
+        [date(2021, 1, 1)],
+        as_of=datetime(2024, 1, 1, tzinfo=UTC),
+        filesystem=pafs.LocalFileSystem(),
+        root=str(tmp_path),
+    )
+
+    assert result[date(2021, 1, 1)] == {"AAA"}
