@@ -7,11 +7,9 @@ Local MinIO / S3-compatible lake reader for Backtester(source="minio").
 
 Reads bitemporal Parquet datasets laid out as
 s3://{bucket}/dataset={name}/**/*.parquet (event_time + knowledge_time
-columns on every row), the same convention a separate private research
-project (IMQuantFund) uses for its own lake -- this module is an
-independent, from-scratch reimplementation of just the PIT-resolution
-logic needed here, kept dependency-free of that project since
-quantjourney-bt is published separately.
+columns on every row) -- a common convention for point-in-time-correct
+research data lakes. This module implements just the PIT-resolution
+logic needed here, independent of any specific lake-writer implementation.
 
 pyarrow is imported lazily inside these functions, not at module load
 time, so it stays an opt-in dependency (`pip install quantjourney-bt[minio]`)
