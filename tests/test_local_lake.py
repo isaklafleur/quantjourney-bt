@@ -12,7 +12,12 @@ import pyarrow as pa
 import pyarrow.fs as pafs
 import pyarrow.parquet as pq
 
-from backtester.local_lake import pit_sp500_ticker_universe, read_pit, resolve_pit_sp500
+from backtester.local_lake import (
+    pit_sp500_ticker_universe,
+    read_pit,
+    resolve_pit_sp500,
+    sctr_features_ticker_universe,
+)
 
 
 def _write_parquet(root, dataset: str, rows: list[dict]) -> None:
@@ -306,3 +311,69 @@ def test_resolve_pit_sp500_preserves_distinct_spans_for_same_symbol_reentry(tmp_
         root=str(tmp_path),
     )
     assert universe_span2 == ["AAA"]  # window overlaps span 2
+
+
+def test_sctr_features_ticker_universe_includes_names_outside_current_membership(tmp_path):
+    # AAA has an sctr_features row but is NOT an index member per
+    # index_membership in this window (confirmed against real data: the
+    # original strategy trades exactly this way, with no separate
+    # membership filter) -- the universe must still include it.
+    rows = [
+        {
+            "ticker": "AAA",
+            "event_time": datetime(2016, 3, 11, tzinfo=UTC),
+            "knowledge_time": datetime(2016, 3, 11, tzinfo=UTC),
+            "close": 100.0,
+            "pct_above_ema200": 0.0, "roc125": 0.0, "pct_above_ema50": 0.0,
+            "roc20": 0.0, "ppo_slope": 0.0, "rsi14": 0.0,
+            "indicator_score": 0.0, "rank": 99.0,
+        },
+        {
+            "ticker": "BBB",
+            "event_time": datetime(2016, 3, 12, tzinfo=UTC),
+            "knowledge_time": datetime(2016, 3, 12, tzinfo=UTC),
+            "close": 50.0,
+            "pct_above_ema200": 0.0, "roc125": 0.0, "pct_above_ema50": 0.0,
+            "roc20": 0.0, "ppo_slope": 0.0, "rsi14": 0.0,
+            "indicator_score": 0.0, "rank": 50.0,
+        },
+    ]
+    _write_parquet(tmp_path, "sctr_features", rows)
+
+    universe = sctr_features_ticker_universe(
+        date(2016, 1, 1),
+        date(2016, 12, 31),
+        as_of=datetime(2024, 1, 1, tzinfo=UTC),
+        filesystem=pafs.LocalFileSystem(),
+        root=str(tmp_path),
+    )
+
+    assert universe == ["AAA", "BBB"]
+
+
+def test_sctr_features_ticker_universe_returns_empty_list_when_no_rows(tmp_path):
+    _write_parquet(
+        tmp_path,
+        "sctr_features",
+        [
+            {
+                "ticker": "AAA",
+                "event_time": datetime(2010, 1, 1, tzinfo=UTC),
+                "knowledge_time": datetime(2010, 1, 1, tzinfo=UTC),
+                "close": 100.0,
+                "pct_above_ema200": 0.0, "roc125": 0.0, "pct_above_ema50": 0.0,
+                "roc20": 0.0, "ppo_slope": 0.0, "rsi14": 0.0,
+                "indicator_score": 0.0, "rank": 99.0,
+            }
+        ],
+    )
+
+    universe = sctr_features_ticker_universe(
+        date(2016, 1, 1),
+        date(2016, 12, 31),
+        as_of=datetime(2024, 1, 1, tzinfo=UTC),
+        filesystem=pafs.LocalFileSystem(),
+        root=str(tmp_path),
+    )
+
+    assert universe == []

@@ -19,7 +19,7 @@ Usage:
 import asyncio
 from datetime import UTC, date, datetime
 
-from backtester.local_lake import pit_sp500_ticker_universe, read_pit
+from backtester.local_lake import read_pit, sctr_features_ticker_universe
 from backtester.local_validation import compare_return_series
 from backtester.portfolio.weight_cost import FixedBpsWeightCostModel
 from strategies.sctr_momentum_regime_gated import SCTRMomentumRegimeGated
@@ -28,7 +28,7 @@ from strategies.sctr_momentum_regime_gated import SCTRMomentumRegimeGated
 async def main() -> None:
     as_of = datetime.now(UTC)
     start_date, end_date = date(2016, 1, 1), as_of.date()
-    instruments = pit_sp500_ticker_universe(start_date, end_date, as_of=as_of)
+    instruments = sctr_features_ticker_universe(start_date, end_date, as_of=as_of)
 
     strategy = SCTRMomentumRegimeGated(
         strategy_name="SCTRMomentumRegimeGated_validation",

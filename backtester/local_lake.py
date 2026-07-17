@@ -174,9 +174,11 @@ def pit_sp500_ticker_universe(
     root: str | None = None,
 ) -> list[str]:
     """The union of every ticker that was an S&P 500 member at any point
-    in [start, end], PIT-resolved as of `as_of`. Used to build the
-    instrument list passed to Backtester.__init__ -- day-by-day
-    eligibility is enforced separately, via resolve_pit_sp500."""
+    in [start, end], PIT-resolved as of `as_of`. Day-by-day eligibility
+    is enforced separately, via resolve_pit_sp500. NOTE: not used for
+    the SCTR momentum regime-gated strategy's instrument universe --
+    see sctr_features_ticker_universe and that strategy's module
+    docstring for why."""
     membership = read_pit(
         "processed",
         "index_membership",
@@ -196,3 +198,36 @@ def pit_sp500_ticker_universe(
         & (membership["opt_out"].isna() | (membership["opt_out"] >= start_ts))
     ]
     return sorted(active["symbol"].unique().tolist())
+
+
+def sctr_features_ticker_universe(
+    start: date,
+    end: date,
+    *,
+    as_of: datetime,
+    filesystem: Any = None,
+    root: str | None = None,
+) -> list[str]:
+    """The full set of tickers with any research/sctr_features row in
+    [start, end], PIT-resolved as of `as_of`.
+
+    Confirmed against real data and the original strategy's own asset
+    code that it never applies a separate PIT S&P 500 membership filter
+    at runtime -- it trades whatever sctr_features covers directly (that
+    dataset's own universe is not identical to processed/index_membership:
+    e.g. it includes names that had already left, or had not yet
+    (re-)joined, the index as of a given trade date). Use this, not
+    pit_sp500_ticker_universe, to match that behavior.
+    """
+    sctr = read_pit(
+        "research",
+        "sctr_features",
+        as_of=as_of,
+        start=start,
+        end=end,
+        filesystem=filesystem,
+        root=root,
+    )
+    if sctr.empty:
+        return []
+    return sorted(sctr["ticker"].unique().tolist())

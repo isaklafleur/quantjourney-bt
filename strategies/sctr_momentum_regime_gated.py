@@ -20,8 +20,21 @@ equal-weight positions with incumbent-priority slot selection. On any day
 PIT-resolved SPY closes below its 200-day SMA, every held name is
 force-liquidated and no new entries are taken; re-entry is immediate and
 automatic the first day the trend flips back up, with no added
-hysteresis on the gate itself. Universe is the PIT S&P 500 roster --
-`eligibility` masks out names on days they weren't index members.
+hysteresis on the gate itself.
+
+Universe: every ticker with a research/sctr_features row (sctr_features_
+ticker_universe), NOT a PIT S&P 500 membership reconstruction. Verified
+directly against the original strategy's own asset code and real data
+(comparing actual daily holdings between the two engines on
+2016-03-11, the first trade day in both): the original never applies a
+separate index-membership filter at runtime -- it trades whatever
+sctr_features covers, which is not identical to processed/index_membership
+(it includes names that had already left, or had not yet (re-)joined,
+the index as of a given trade date). An earlier version of this port
+gated entries on PIT S&P 500 membership, which excluded real trades the
+original took and drove return correlation to ~0 against the original's
+materialized result -- do not reintroduce that gate without re-checking
+against real data first.
 """
 
 from __future__ import annotations
@@ -32,7 +45,7 @@ from datetime import UTC, date, datetime
 import pandas as pd
 
 from backtester import Backtester
-from backtester.local_lake import pit_sp500_ticker_universe
+from backtester.local_lake import sctr_features_ticker_universe
 from backtester.portfolio.weight_cost import FixedBpsWeightCostModel
 
 ENTRY_THRESHOLD = 95.0
@@ -117,7 +130,12 @@ class SCTRMomentumRegimeGated(Backtester):
 
     def _compute_weights(self) -> pd.DataFrame:
         rank = self.signals
-        eligibility = self.instruments_data.get_feature("parameters", level="eligibility")
+        # No PIT S&P 500 eligibility mask here, deliberately -- see the
+        # module docstring. The original strategy never gates entries on
+        # index membership, so every name with an sctr_features row is
+        # always eligible; _build_regime_gated_weights still accepts an
+        # eligibility panel (used by its own tests), it's just all-1.0 here.
+        eligibility = pd.DataFrame(1.0, index=rank.index, columns=rank.columns)
         trend_down_panel = self.instruments_data.get_feature("parameters", level="spy_trend_down")
         trend_down = trend_down_panel.iloc[:, 0]  # broadcast market-wide flag -> single Series
         return _build_regime_gated_weights(
@@ -135,7 +153,7 @@ class SCTRMomentumRegimeGated(Backtester):
 async def main() -> None:
     as_of = datetime.now(UTC)
     start_date, end_date = date(2016, 1, 1), as_of.date()
-    instruments = pit_sp500_ticker_universe(start_date, end_date, as_of=as_of)
+    instruments = sctr_features_ticker_universe(start_date, end_date, as_of=as_of)
 
     strategy = SCTRMomentumRegimeGated(
         strategy_name="SCTRMomentumRegimeGated",
