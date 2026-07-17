@@ -24,6 +24,7 @@ build/
 
 # Local/private planning notes.
 /_requests/
+/.superpowers/
 
 # Local data/cache artifacts.
 /data/
