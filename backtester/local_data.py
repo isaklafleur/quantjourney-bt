@@ -176,12 +176,14 @@ def build_local_minio_bt_payload(
     if bars.empty:
         raise ValueError(f"No equity_bars_1d_yahoo_adj rows for {tickers} in [{start}, {end}]")
 
+    # No `start=` here (unlike the equity bars read above): the 200-day SMA
+    # in _spy_trend_down needs lookback before start_date, so SPY is read
+    # from full history rather than truncated to the backtest window.
     spy_bars = read_pit(
         "processed",
         "market_ref_bars_1d_yahoo_adj",
         as_of=as_of,
         tickers=[SPY_TICKER],
-        start=start_date,
         end=end_date,
         filesystem=filesystem,
         root=root,

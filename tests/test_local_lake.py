@@ -255,3 +255,54 @@ def test_resolve_pit_sp500_dedupes_repeated_snapshot_rewrites(tmp_path):
     )
 
     assert result[date(2021, 1, 1)] == {"AAA"}
+
+
+def test_resolve_pit_sp500_preserves_distinct_spans_for_same_symbol_reentry(tmp_path):
+    # AAA left the index (span 1) and later re-entered (span 2). Both
+    # spans share the symbol but have different event_time/opt_out facts,
+    # so PIT resolution keyed on (symbol, event_time) must keep both.
+    rows = [
+        {
+            "symbol": "AAA", "name": "AAA Inc", "index_name": "sp500",
+            "opt_out": datetime(2015, 1, 1, tzinfo=UTC),
+            "event_time": datetime(2010, 1, 1, tzinfo=UTC),
+            "knowledge_time": datetime(2010, 1, 1, tzinfo=UTC),
+        },
+        {
+            "symbol": "AAA", "name": "AAA Inc", "index_name": "sp500",
+            "opt_out": None,
+            "event_time": datetime(2018, 1, 1, tzinfo=UTC),
+            "knowledge_time": datetime(2018, 1, 1, tzinfo=UTC),
+        },
+    ]
+    _write_parquet(tmp_path, "index_membership", rows)
+
+    days = [date(2012, 1, 1), date(2016, 1, 1), date(2020, 1, 1)]
+    result = resolve_pit_sp500(
+        days,
+        as_of=datetime(2024, 1, 1, tzinfo=UTC),
+        filesystem=pafs.LocalFileSystem(),
+        root=str(tmp_path),
+    )
+
+    assert result[date(2012, 1, 1)] == {"AAA"}  # inside span 1
+    assert result[date(2016, 1, 1)] == set()  # gap between spans
+    assert result[date(2020, 1, 1)] == {"AAA"}  # inside span 2 (re-entry)
+
+    universe = pit_sp500_ticker_universe(
+        date(2011, 1, 1),
+        date(2013, 1, 1),
+        as_of=datetime(2024, 1, 1, tzinfo=UTC),
+        filesystem=pafs.LocalFileSystem(),
+        root=str(tmp_path),
+    )
+    assert universe == ["AAA"]  # window overlaps span 1
+
+    universe_span2 = pit_sp500_ticker_universe(
+        date(2019, 1, 1),
+        date(2021, 1, 1),
+        as_of=datetime(2024, 1, 1, tzinfo=UTC),
+        filesystem=pafs.LocalFileSystem(),
+        root=str(tmp_path),
+    )
+    assert universe_span2 == ["AAA"]  # window overlaps span 2

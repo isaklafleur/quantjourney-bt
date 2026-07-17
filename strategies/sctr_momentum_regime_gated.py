@@ -8,9 +8,9 @@ SCTR Momentum, Regime-Gated (Binary Trend Pause)
 
 Mode: weights.
 
-Port of docs/research/strategies/sctr-momentum-regime-gated.md (a
-separate private research project) run here against local MinIO data
-(source="minio") instead of that project's own engine -- see
+Port of a strategy spec from a separate private research project, run
+here against local MinIO data (source="minio") instead of that
+project's own engine -- see
 docs/superpowers/specs/2026-07-16-minio-local-data-sctr-backtest-design.md
 for the full design and known fidelity gaps versus the original.
 

@@ -71,9 +71,11 @@ def read_pit(
     Filters to `knowledge_time <= as_of`, then keeps exactly one row per
     `pit_keys` combination -- the row with the latest `knowledge_time`.
     Most datasets are keyed by (ticker, event_time); index_membership
-    (Task 3) is keyed by (symbol,) instead, since a symbol's own
-    event_time/opt_out facts don't change across repeated snapshot
-    rewrites of that dataset.
+    is keyed by (symbol, event_time) instead, since a symbol can have
+    multiple distinct membership spans (e.g. it left and later re-entered
+    the index) that must each survive PIT resolution, while repeated
+    snapshot rewrites of the *same* span (identical symbol and event_time,
+    different knowledge_time) still collapse to one row.
 
     `filesystem`/`root` let callers (tests) point this at a local
     directory instead of real S3 -- production callers omit both and get
@@ -133,15 +135,17 @@ def resolve_pit_sp500(
 
     A symbol is a member on `day` if some membership row has
     `event_time <= day` and (`opt_out` is null or `opt_out > day`).
-    Keyed by `symbol` alone for PIT resolution (not `symbol, event_time`)
-    -- a symbol's own event_time/opt_out facts are fixed regardless of
-    how many times the source dataset gets rewritten wholesale.
+    Keyed by `(symbol, event_time)` for PIT resolution -- a symbol may
+    have multiple distinct membership spans (left and later re-entered
+    the index), each with its own event_time/opt_out, and all of them
+    must survive PIT resolution; only repeated snapshot rewrites of the
+    same span collapse to one row.
     """
     membership = read_pit(
         "processed",
         "index_membership",
         as_of=as_of,
-        pit_keys=("symbol",),
+        pit_keys=("symbol", "event_time"),
         filesystem=filesystem,
         root=root,
     )
@@ -177,7 +181,7 @@ def pit_sp500_ticker_universe(
         "processed",
         "index_membership",
         as_of=as_of,
-        pit_keys=("symbol",),
+        pit_keys=("symbol", "event_time"),
         filesystem=filesystem,
         root=root,
     )
