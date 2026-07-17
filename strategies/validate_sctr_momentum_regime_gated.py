@@ -56,16 +56,30 @@ async def main() -> None:
     reference_returns = reference.set_index("event_time")["net_return"]
     reference_returns.index = reference_returns.index.tz_localize(None)
 
-    result = compare_return_series(local_returns, reference_returns)
+    # The two engines book the same T -> T+1 price move under different
+    # calendar labels: the original's run_backtest joins the forward
+    # return back onto the DECISION day (event_time=T, see its own "weight[T]
+    # instead earns ret_1d[T+1]" comment), while this engine's
+    # target_weights.shift(1) shifts the WEIGHT forward instead, booking the
+    # same move under the REALIZATION day (T+1). Same economics, one
+    # calendar day apart -- shift local_returns back by one day before
+    # comparing so this doesn't read as "no relationship" between two
+    # strategies making nearly identical decisions. Both the same-day and
+    # lag-corrected correlation are reported so this convention difference
+    # stays visible rather than silently invisible.
+    same_day_result = compare_return_series(local_returns, reference_returns)
+    lag_corrected_result = compare_return_series(local_returns.shift(-1), reference_returns)
+
     print("SCTRMomentumRegimeGated vs. original trial (analytics/sctr_momentum_regime_gated_pnl)")
-    print(f"  common trading days : {result.n_common_days}")
-    print(f"  return correlation  : {result.correlation:.3f}")
-    print(f"  Sharpe   (qj-bt)    : {result.sharpe_a:.3f}")
-    print(f"  Sharpe   (original) : {result.sharpe_b:.3f}")
-    print(f"  CAGR     (qj-bt)    : {result.cagr_a:.2%}")
-    print(f"  CAGR     (original) : {result.cagr_b:.2%}")
-    print(f"  Max DD   (qj-bt)    : {result.max_drawdown_a:.2%}")
-    print(f"  Max DD   (original) : {result.max_drawdown_b:.2%}")
+    print(f"  common trading days          : {lag_corrected_result.n_common_days}")
+    print(f"  return correlation (same-day): {same_day_result.correlation:.3f}  <- misleading, see comment above")
+    print(f"  return correlation (T-1 lag) : {lag_corrected_result.correlation:.3f}  <- the real comparison")
+    print(f"  Sharpe   (qj-bt)    : {lag_corrected_result.sharpe_a:.3f}")
+    print(f"  Sharpe   (original) : {lag_corrected_result.sharpe_b:.3f}")
+    print(f"  CAGR     (qj-bt)    : {lag_corrected_result.cagr_a:.2%}")
+    print(f"  CAGR     (original) : {lag_corrected_result.cagr_b:.2%}")
+    print(f"  Max DD   (qj-bt)    : {lag_corrected_result.max_drawdown_a:.2%}")
+    print(f"  Max DD   (original) : {lag_corrected_result.max_drawdown_b:.2%}")
 
 
 if __name__ == "__main__":
