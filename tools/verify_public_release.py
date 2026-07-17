@@ -103,6 +103,11 @@ def _source_candidates() -> tuple[set[str], set[str]]:
             part in {".git", ".venv", "__pycache__", "build", "dist"} for part in relative.parts
         ):
             continue
+        # Internal brainstorming specs/plans (superpowers:brainstorming /
+        # writing-plans output) -- never public-package material, and
+        # regenerated too often to hand-curate in public_artifacts.txt.
+        if relative.parts[:2] == ("docs", "superpowers"):
+            continue
         normalized = relative.as_posix()
         if (
             relative.parts
