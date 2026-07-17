@@ -11,26 +11,7 @@ from typing import Any
 import numpy as np
 import pandas as pd
 
-
-def _frame_payload(df: pd.DataFrame) -> dict[str, Any]:
-    columns = [
-        {"instrument": str(instrument), "field": str(field)}
-        for instrument, field in df.columns.to_list()
-    ]
-    safe = df.astype(object).where(pd.notna(df), None)
-    return {
-        "columns": columns,
-        "index": [idx.isoformat() for idx in df.index],
-        "data": safe.values.tolist(),
-    }
-
-
-def _series_payload(series: pd.Series) -> dict[str, Any]:
-    safe = series.astype(object).where(pd.notna(series), None)
-    return {
-        "index": [idx.isoformat() for idx in series.index],
-        "data": safe.tolist(),
-    }
+from backtester.bt_payload import frame_payload, series_payload
 
 
 def build_sample_bt_payload(
@@ -137,10 +118,10 @@ def build_sample_bt_payload(
         "session_id": "sample-session",
         "dataset_id": "sample-dataset",
         "instrument_names": symbols,
-        "prices": _frame_payload(prices_df),
-        "metrics": _frame_payload(metrics_df),
-        "parameters": _frame_payload(parameters_df),
-        "nav": _series_payload(portfolio_nav),
+        "prices": frame_payload(prices_df),
+        "metrics": frame_payload(metrics_df),
+        "parameters": frame_payload(parameters_df),
+        "nav": series_payload(portfolio_nav),
         "summary": {
             "source": "sample",
             "instruments": len(symbols),
