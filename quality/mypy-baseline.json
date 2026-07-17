@@ -9,7 +9,7 @@
       "types-python-dateutil": "2.9.0.20260518"
     }
   },
-  "error_count": 800,
+  "error_count": 804,
   "errors": [
     "[\"backtester/bt_payload.py\",\"call-overload\",\"No overload variant of \\\"where\\\" of \\\"DataFrame\\\" matches argument types \\\"DataFrame\\\", \\\"None\\\"\",\"b09e6fb53266ceb9\"]",
     "[\"backtester/bt_payload.py\",\"call-overload\",\"No overload variant of \\\"where\\\" of \\\"Series\\\" matches argument types \\\"Series[bool]\\\", \\\"None\\\"\",\"733a2948b22321da\"]",
@@ -293,6 +293,10 @@
     "[\"backtester/execution/simulator.py\",\"attr-defined\",\"\\\"object\\\" has no attribute \\\"record_target_reconciled\\\"\",\"9436a3422d45d629\"]",
     "[\"backtester/execution/simulator.py\",\"attr-defined\",\"\\\"object\\\" has no attribute \\\"record_target_reconciled\\\"\",\"9436a3422d45d629\"]",
     "[\"backtester/execution/simulator.py\",\"call-overload\",\"No overload variant of \\\"__getitem__\\\" of \\\"_LocIndexerFrame\\\" matches argument type \\\"object\\\"\",\"3ac48a8186956491\"]",
+    "[\"backtester/local_data.py\",\"arg-type\",\"Argument 1 to \\\"from_tuples\\\" of \\\"MultiIndex\\\" has incompatible type \\\"Index[str]\\\"; expected \\\"Iterable[tuple[Hashable, ...]]\\\"\",\"0194352737b60f9c\"]",
+    "[\"backtester/local_data.py\",\"arg-type\",\"Argument 1 to \\\"from_tuples\\\" of \\\"MultiIndex\\\" has incompatible type \\\"Index[str]\\\"; expected \\\"Iterable[tuple[Hashable, ...]]\\\"\",\"49d95af5c90761e9\"]",
+    "[\"backtester/local_data.py\",\"attr-defined\",\"\\\"Index[str]\\\" has no attribute \\\"swaplevel\\\"\",\"cc5dd1f16355073b\"]",
+    "[\"backtester/local_data.py\",\"call-overload\",\"No overload variant of \\\"mean\\\" of \\\"Series\\\" matches argument type \\\"int\\\"\",\"8da2f60938b814e9\"]",
     "[\"backtester/local_lake.py\",\"import-untyped\",\"Skipping analyzing \\\"pyarrow.dataset\\\": module is installed, but missing library stubs or py.typed marker\",\"e3b0c44298fc1c14\"]",
     "[\"backtester/local_lake.py\",\"import-untyped\",\"Skipping analyzing \\\"pyarrow.fs\\\": module is installed, but missing library stubs or py.typed marker\",\"e3b0c44298fc1c14\"]",
     "[\"backtester/local_lake.py\",\"import-untyped\",\"Skipping analyzing \\\"pyarrow\\\": module is installed, but missing library stubs or py.typed marker\",\"e3b0c44298fc1c14\"]",
