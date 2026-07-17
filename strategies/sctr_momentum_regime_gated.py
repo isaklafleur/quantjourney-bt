@@ -108,7 +108,12 @@ class SCTRMomentumRegimeGated(Backtester):
     max_positions = MAX_POSITIONS
 
     def _compute_signals(self) -> pd.DataFrame:
-        return self.instruments_data.get_feature("parameters", level="sctr_rank")
+        # NaN where sctr_features has no row for a (ticker, date) pair (e.g.
+        # before a name's feature history starts) -- filled with 0.0 (safely
+        # below both entry_threshold and hold_threshold, so it never
+        # spuriously qualifies) because the engine's own signal validation
+        # requires every value to be finite.
+        return self.instruments_data.get_feature("parameters", level="sctr_rank").fillna(0.0)
 
     def _compute_weights(self) -> pd.DataFrame:
         rank = self.signals

@@ -99,3 +99,31 @@ def test_strategy_wires_parameters_panel_into_regime_gated_weights():
     assert weights.loc[dates[2], "AAA"] == 1.0  # immediate re-entry
     assert weights.loc[dates[3], "AAA"] == 1.0
     assert (weights["BBB"] == 0.0).all()  # never crosses entry_threshold
+
+
+def test_compute_signals_fills_nan_rank_so_engine_validation_accepts_it():
+    # Real sctr_features data has NaN gaps -- e.g. a ticker before its
+    # feature history starts. The engine's own signal validation
+    # (Backtester._validate_strategy_output) rejects non-finite values,
+    # so _compute_signals must not pass NaN through.
+    dates = pd.bdate_range("2024-01-01", periods=3, tz="UTC")
+    tickers = ["AAA", "BBB"]
+    rank = pd.DataFrame({"AAA": [96.0, float("nan"), 96.0], "BBB": [50.0] * 3}, index=dates)
+    eligibility = pd.DataFrame({"AAA": [1.0] * 3, "BBB": [1.0] * 3}, index=dates)
+    trend_down = pd.Series([0.0, 0.0, 0.0], index=dates)
+
+    strategy = SCTRMomentumRegimeGated(
+        instruments=tickers,
+        backtest_period={"start": "2024-01-01", "end": "2024-01-10"},
+        source="minio",
+        strategy_name="test_sctr_regime_gated_nan",
+        show_text_reports=False,
+        skip_analysis=True,
+    )
+    strategy.instruments_data = _instruments_data(dates, tickers, rank, eligibility, trend_down)
+
+    signals = strategy._compute_signals()
+
+    assert signals.to_numpy(dtype=float).size > 0
+    assert (signals.to_numpy(dtype=float) == signals.to_numpy(dtype=float)).all()  # no NaN
+    assert signals.loc[dates[1], "AAA"] == 0.0  # NaN filled to a value below both thresholds
