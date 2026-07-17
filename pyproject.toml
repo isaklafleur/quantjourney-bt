@@ -64,6 +64,7 @@ typecheck = [
 data = ["yfinance>=0.2"]
 reports = ["scipy>=1.11", "seaborn>=0.13"]
 wf = ["optuna>=3.0"]
+minio = ["pyarrow>=14"]
 
 [project.urls]
 Homepage = "https://backtester.quantjourney.cloud"

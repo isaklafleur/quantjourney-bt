@@ -21,6 +21,7 @@ both backtester/execution/fill_engine.py
 both backtester/execution/order_types.py
 both backtester/execution/simulator.py
 both backtester/execution/slippage.py
+both backtester/local_lake.py
 both backtester/metrics/__init__.py
 both backtester/metrics/configs/__init__.py
 both backtester/metrics/configs/portfolio_perf.py
