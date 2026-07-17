@@ -54,7 +54,7 @@ from common import (  # noqa: E402
 from backtester import Backtester  # noqa: E402
 from backtester.portfolio.rebalance import RebalancePolicy  # noqa: E402
 from backtester.portfolio.weight_cost import FixedBpsWeightCostModel  # noqa: E402
-from backtester.sample_data import _frame_payload, _series_payload  # noqa: E402
+from backtester.bt_payload import frame_payload, series_payload  # noqa: E402
 
 
 def _payload_from_panel(instruments: list[str]) -> dict:
@@ -135,10 +135,10 @@ def _payload_from_panel(instruments: list[str]) -> dict:
         "session_id": "native-local-session",
         "dataset_id": "native-local-dataset",
         "instrument_names": list(instruments),
-        "prices": _frame_payload(prices_df),
-        "metrics": _frame_payload(metrics_df),
-        "parameters": _frame_payload(parameters_df),
-        "nav": _series_payload(portfolio_nav),
+        "prices": frame_payload(prices_df),
+        "metrics": frame_payload(metrics_df),
+        "parameters": frame_payload(parameters_df),
+        "nav": series_payload(portfolio_nav),
         "summary": {
             "source": "local-panel",
             "instruments": len(instruments),
