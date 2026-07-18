@@ -11,10 +11,10 @@ documents what ships here versus what is provided by the hosted platform.
   modes, transaction-cost and slippage models.
 - Shared execution simulator and contract-aware portfolio ledger, including
   portfolio-of-strategies allocation and pre-trade risk controls.
-- Walk-forward validation and optimization: rolling, expanding, anchored,
-  and purged/embargoed fold schemes; grid search and Optuna (TPE) parameter
-  optimization; overfitting diagnostics (deflated Sharpe ratio, PBO,
-  overfit-ratio interpretation).
+- Walk-forward validation and optimization: rolling, expanding and anchored
+  folds with explicit pre-OOS purging; fail-closed date-bounded refits; grid
+  search and Optuna (TPE); deflated Sharpe with effective-trial reporting;
+  rolling top-K rank stability and overfit-ratio interpretation.
 - 50 example strategies (25 weights-based, 20 order-based, 5 walk-forward)
   with a reproducible sample-data mode that requires no account.
 - Static report generation: metrics, PNG chart pack, and a static HTML

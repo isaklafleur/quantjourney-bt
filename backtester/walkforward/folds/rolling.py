@@ -15,7 +15,7 @@ from dateutil.relativedelta import relativedelta
 
 from backtester.walkforward.config import WalkForwardConfig
 from backtester.walkforward.folds.base import Fold
-from backtester.walkforward.folds.purge import compute_purge_embargo
+from backtester.walkforward.folds.purge import compute_pre_oos_purge
 
 
 class RollingFoldScheme:
@@ -71,11 +71,11 @@ class RollingFoldScheme:
             o_start = oos_dates[0]
             o_end = oos_dates[-1]
 
-            eff_is_end, purge_start, purge_end = compute_purge_embargo(
+            eff_is_end, purge_start, purge_end = compute_pre_oos_purge(
                 is_end=t_end,
                 oos_start=o_start,
                 purge_days=self._cfg.purge_days,
-                embargo_pct=self._cfg.embargo_pct,
+                extra_pre_oos_purge_pct=self._cfg.resolved_extra_pre_oos_purge_pct,
                 trading_dates=trading_dates,
                 is_start=t_start,
                 max_holding_period_days=self._cfg.max_holding_period_days,

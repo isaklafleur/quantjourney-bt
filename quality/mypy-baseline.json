@@ -2,14 +2,14 @@
   "schema": 2,
   "context": {
     "config_sha256": "58319a2dcf443e8de2b5ae9fec1ceea84775dde58d8fe68107a8de85656c3783",
-    "lock_sha256": "4eda507fa6795bd563fda68c83ba685cf8b5d7101819c3319275403df8e26ddf",
+    "lock_sha256": "7eaf9c1c95c3584a7552d74a2af3e9096e2a5ae494c84daddf5c7cfbdf294ecc",
     "packages": {
       "mypy": "2.2.0",
       "pandas-stubs": "2.3.3.260113",
       "types-python-dateutil": "2.9.0.20260518"
     }
   },
-  "error_count": 789,
+  "error_count": 788,
   "errors": [
     "[\"backtester/core.py\",\"arg-type\",\"Argument \\\"dates\\\" to \\\"ExecutionRebalanceEngine\\\" has incompatible type \\\"Index[Any]\\\"; expected \\\"DatetimeIndex\\\"\",\"4d28b5a0297ef8e6\"]",
     "[\"backtester/core.py\",\"arg-type\",\"Argument \\\"fill_engine\\\" to \\\"ExecutionSimulator\\\" has incompatible type \\\"FillEngine | None\\\"; expected \\\"FillEngine\\\"\",\"2430f504bb8d5d3f\"]",
@@ -750,7 +750,6 @@
     "[\"backtester/walkforward/engine.py\",\"arg-type\",\"Argument 1 to \\\"float\\\" has incompatible type \\\"str | bytes | date | timedelta | datetime64[date | int | None] | <7 more items>\\\"; expected \\\"str | Buffer | SupportsFloat | SupportsIndex\\\"\",\"870b4a4086268287\"]",
     "[\"backtester/walkforward/engine.py\",\"arg-type\",\"Argument 1 to \\\"float\\\" has incompatible type \\\"str | bytes | date | timedelta | datetime64[date | int | None] | <7 more items>\\\"; expected \\\"str | Buffer | SupportsFloat | SupportsIndex\\\"\",\"f03c0f855fd24d49\"]",
     "[\"backtester/walkforward/folds/__init__.py\",\"return-value\",\"Incompatible return value type (got \\\"object\\\", expected \\\"FoldScheme\\\")\",\"ecac8778c7fb7329\"]",
-    "[\"backtester/walkforward/folds/purge.py\",\"return-value\",\"Incompatible return value type (got \\\"tuple[Timestamp, None, None]\\\", expected \\\"tuple[Timestamp, Timestamp, Timestamp]\\\")\",\"eacb2b8499bcb0db\"]",
     "[\"backtester/walkforward/optimization/__init__.py\",\"no-untyped-def\",\"Function is missing a type annotation for one or more parameters\",\"da98c5cb81b9e2f1\"]",
     "[\"backtester/walkforward/optimization/grid.py\",\"type-arg\",\"Missing type arguments for generic type \\\"list\\\"\",\"acac86c0e609ca90\"]",
     "[\"backtester/walkforward/optimization/grid.py\",\"type-arg\",\"Missing type arguments for generic type \\\"tuple\\\"\",\"e3b98a4da31a127d\"]",

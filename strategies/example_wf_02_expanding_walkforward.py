@@ -109,7 +109,7 @@ async def main() -> None:
         test_months=6,
         step_months=6,
         purge_days=5,
-        embargo_pct=0.01,
+        extra_pre_oos_purge_pct=0.01,
     )
     engine_kwargs = {}
     if mode == "per_fold_refit":
@@ -117,6 +117,7 @@ async def main() -> None:
         def factory(*, fold, train_start, train_end, oos_start, oos_end, **_) -> SMATrendForWF:
             return _build_strategy(
                 strategy_name=f"ExampleWF02_ExpandingWalkForward_Fold{fold.fold_id:02d}",
+                backtest_period={"start": train_start, "end": oos_end},
             )
 
         engine_kwargs["backtester_factory"] = factory

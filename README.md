@@ -395,9 +395,9 @@ accounting is rejected rather than approximated.
 
 | # | Example | Idea | Code | Results |
 |:--|:--|:--|:--|:--|
-| WF01 | Rolling Walk-Forward | Sliding fixed-length train/test windows with purge/embargo | [source](strategies/example_wf_01_rolling_walkforward.py) | [view](https://backtester.quantjourney.cloud/strategies/example-wf-01-rolling-walkforward) |
+| WF01 | Rolling Walk-Forward | Sliding fixed-length train/test windows with a pre-OOS purge | [source](strategies/example_wf_01_rolling_walkforward.py) | [view](https://backtester.quantjourney.cloud/strategies/example-wf-01-rolling-walkforward) |
 | WF02 | Expanding Walk-Forward | Ever-growing training window vs sliding test window | [source](strategies/example_wf_02_expanding_walkforward.py) | [view](https://backtester.quantjourney.cloud/strategies/example-wf-02-expanding-walkforward) |
-| WF03 | Anchored + Purge/Embargo | How purge and embargo gaps prevent train/test leakage | [source](strategies/example_wf_03_anchored_purge_embargo.py) | [view](https://backtester.quantjourney.cloud/strategies/example-wf-03-anchored-purge-embargo) |
+| WF03 | Anchored + Pre-OOS Purging | Fixed and percentage-based exclusions before each test window | [source](strategies/example_wf_03_anchored_purge_embargo.py) | [view](https://backtester.quantjourney.cloud/strategies/example-wf-03-anchored-purge-embargo) |
 | WF04 | Grid Search | Exhaustive SMA fast/slow tuning scored by real backtests | [source](strategies/example_wf_04_grid_search_optimization.py) | [view](https://backtester.quantjourney.cloud/strategies/example-wf-04-grid-search-optimization) |
 | WF05 | Optuna TPE + Walk-Forward | Bayesian parameter search, then out-of-sample validation | [source](strategies/example_wf_05_optuna_tpe_optimization.py) | [view](https://backtester.quantjourney.cloud/strategies/example-wf-05-optuna-tpe-optimization) |
 
@@ -411,7 +411,16 @@ QJ_WF_MODE=per_fold_refit ./strategy.sh example_wf_01_rolling_walkforward
 
 The logs and walk-forward summary report the active mode. Per-fold refit is
 slower because each fold runs the strategy again through the data/preparation
-pipeline. WF04-WF05 are optimization workflows and should be read as selection
+pipeline. Factories receive ISO date strings, and the runner fails closed if
+the returned NAV escapes the requested fold bounds. Learned preprocessing must
+still be fitted on training data only.
+
+`extra_pre_oos_purge_pct` extends the exclusion immediately before OOS; the
+legacy `embargo_pct` alias does not implement classical post-test embargo.
+Optimizer runs report DSR with raw/effective trial counts plus a rolling top-K
+rank-failure diagnostic. The latter is not canonical CSCV PBO.
+
+WF04-WF05 are optimization workflows and should be read as selection
 diagnostics rather than a simple winner-takes-all backtest.
 
 Long/short examples (W13–W16) are market-neutral; short borrow/financing is not

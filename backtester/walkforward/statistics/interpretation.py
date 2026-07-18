@@ -64,13 +64,6 @@ _THRESHOLDS = {
         "yellow_desc": "0.80–0.95 — marginal",
         "red_desc": "< 0.80 — likely false positive",
     },
-    "pbo": {
-        "green": lambda v: v < 0.15,
-        "yellow": lambda v: 0.15 <= v <= 0.40,
-        "green_desc": "< 0.15 — low overfit probability",
-        "yellow_desc": "0.15–0.40 — moderate risk",
-        "red_desc": "> 0.40 — likely overfit",
-    },
     "breakeven_bps": {
         "green": lambda v: v > 20,
         "yellow": lambda v: 10 <= v <= 20,
@@ -88,7 +81,7 @@ _GATED_ON_OOS_SHARPE = ("overfit_ratio", "sharpe_decay")
 
 # Below this fold count, fold-derived verdicts are indicative only.
 _MIN_FOLDS_FOR_VERDICT = 6
-_LOW_FOLD_METRICS = ("pbo", "sharpe_decay")
+_LOW_FOLD_METRICS = ("sharpe_decay",)
 
 
 def _classify(metric_name: str, value: float) -> tuple[Signal, str]:
@@ -112,20 +105,21 @@ def interpret_metrics(
 
     Args:
         metrics: dict with keys like ``overfit_ratio``, ``efficiency``,
-                 ``sharpe_decay``, ``deflated_sharpe``, ``pbo``, ``breakeven_bps``.
+                 ``sharpe_decay``, ``deflated_sharpe``, ``breakeven_bps``.
                  Context keys (no verdict of their own, used to gate the
                  others): ``composite_sharpe`` / ``oos_sharpe`` — the
                  aggregate OOS Sharpe; when <= 0, overfit_ratio and
                  sharpe_decay verdicts are forced red (a losing strategy
                  must never look "robust" or "stable"). ``n_folds`` —
-                 when < 6, pbo and sharpe_decay descriptions are tagged
+                 when < 6, sharpe_decay descriptions are tagged
                  "(low fold count — indicative only)".
 
     Returns:
         List of ``MetricVerdict`` (one per metric that has a threshold).
-        Metrics that are ``None`` or NaN (unavailable — e.g. PBO without
-        per-trial OOS evaluation) are skipped and must be rendered as
-        "n/a" by callers, never as a green verdict.
+        Metrics that are ``None`` or NaN are skipped and must be rendered
+        as "n/a" by callers. The rolling top-K rank-failure diagnostic is
+        deliberately not traffic-light classified: canonical CSCV PBO
+        thresholds do not apply to it.
     """
     oos_sr = metrics.get("composite_sharpe", metrics.get("oos_sharpe"))
     losing = (

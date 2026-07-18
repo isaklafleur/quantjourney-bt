@@ -9,7 +9,7 @@ Example WF 01 - Rolling Walk-Forward Validation
 Mode: weights + walk-forward.
 Idea: run a normal SMA(50/200) trend strategy, then validate its temporal
 robustness with a ROLLING walk-forward (fixed-length train and test windows
-that slide forward), with purge/embargo gaps.
+that slide forward), with a pre-OOS purge gap.
 Universe: canonical US sector ETFs: XLB, XLE, XLF, XLI, XLK, XLP, XLU, XLV and XLY.
 
 What this teaches: in-sample performance is not out-of-sample performance.
@@ -110,7 +110,7 @@ async def main() -> None:
         test_months=6,
         step_months=6,
         purge_days=5,
-        embargo_pct=0.01,
+        extra_pre_oos_purge_pct=0.01,
     )
     engine_kwargs = {}
     if mode == "per_fold_refit":
@@ -118,6 +118,7 @@ async def main() -> None:
         def factory(*, fold, train_start, train_end, oos_start, oos_end, **_) -> SMATrendForWF:
             return _build_strategy(
                 strategy_name=f"ExampleWF01_RollingWalkForward_Fold{fold.fold_id:02d}",
+                backtest_period={"start": train_start, "end": oos_end},
             )
 
         engine_kwargs["backtester_factory"] = factory

@@ -1,5 +1,34 @@
 # QuantJourney Backtester Changelog
 
+## 0.12.0 - 2026-07-18
+
+### Added
+- Added `extra_pre_oos_purge_pct`, an honestly named percentage extension of
+  the exclusion immediately before each OOS window. The historical
+  `embargo_pct` input remains a compatibility alias for 0.12.x and does not
+  claim classical post-test embargo semantics.
+- Added `rank_stability_trials` and
+  `walk_forward_top_k_rank_failure_rate` for the rolling top-K OOS rank
+  diagnostic, plus deprecated read aliases for the former `pbo_*` names.
+- Added `dsr_effective_n_trials` and result fields that report both the raw
+  finite completed-trial count and the effective trial count used by DSR.
+
+### Changed
+- Renamed the rolling top-K rank diagnostic so it is no longer presented as
+  canonical CSCV PBO. Canonical PBO requires a complete configuration matrix
+  and symmetric CSCV combinations; no CSCV threshold is applied to this
+  rolling sensitivity metric.
+- Documented the raw completed-trial count as a conservative DSR approximation
+  when dependence between parameter variants is not estimated.
+
+### Fixed
+- Per-fold refit examples now propagate the runner's ISO `train_start` and
+  `oos_end` values into each strategy's `backtest_period`.
+- Per-fold refits and top-K candidate reruns now fail closed when returned NAV
+  is undated, contains `NaT`, or escapes the requested fold date bounds.
+- Corrected public documentation that previously described the percentage
+  pre-OOS purge extension as classical post-test embargo.
+
 ## 0.11.0 - 2026-07-18
 
 ### Added

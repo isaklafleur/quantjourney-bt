@@ -123,9 +123,9 @@ selection diagnostics, not as a simple winner-takes-all backtest.
 
 | # | Example | Idea | Code | Results |
 |:--|:--|:--|:--|:--|
-| WF01 | Rolling Walk-Forward | Sliding fixed-length train/test windows with purge/embargo | [source](./example_wf_01_rolling_walkforward.py) | [view](https://backtester.quantjourney.cloud/strategies/example-wf-01-rolling-walkforward) |
+| WF01 | Rolling Walk-Forward | Sliding fixed-length train/test windows with a pre-OOS purge | [source](./example_wf_01_rolling_walkforward.py) | [view](https://backtester.quantjourney.cloud/strategies/example-wf-01-rolling-walkforward) |
 | WF02 | Expanding Walk-Forward | Ever-growing training window vs sliding test window | [source](./example_wf_02_expanding_walkforward.py) | [view](https://backtester.quantjourney.cloud/strategies/example-wf-02-expanding-walkforward) |
-| WF03 | Anchored + Purge/Embargo | How purge and embargo gaps prevent train/test leakage | [source](./example_wf_03_anchored_purge_embargo.py) | [view](https://backtester.quantjourney.cloud/strategies/example-wf-03-anchored-purge-embargo) |
+| WF03 | Anchored + Pre-OOS Purging | Fixed and percentage-based exclusions before each test window | [source](./example_wf_03_anchored_purge_embargo.py) | [view](https://backtester.quantjourney.cloud/strategies/example-wf-03-anchored-purge-embargo) |
 | WF04 | Grid Search | Exhaustive SMA fast/slow tuning scored by real backtests | [source](./example_wf_04_grid_search_optimization.py) | [view](https://backtester.quantjourney.cloud/strategies/example-wf-04-grid-search-optimization) |
 | WF05 | Optuna TPE + Walk-Forward | Bayesian parameter search, then out-of-sample validation | [source](./example_wf_05_optuna_tpe_optimization.py) | [view](https://backtester.quantjourney.cloud/strategies/example-wf-05-optuna-tpe-optimization) |
 

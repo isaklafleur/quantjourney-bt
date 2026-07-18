@@ -3,20 +3,21 @@
 # Licensed under the Apache License 2.0.
 
 """
-Example WF 03 - Anchored Walk-Forward With Purge & Embargo
-==========================================================
+Example WF 03 - Anchored Walk-Forward With Pre-OOS Purging
+===========================================================
 
 Mode: weights + walk-forward.
 Idea: validate a weekly RSI mean-reversion strategy with an ANCHORED
-walk-forward, emphasising the purge and embargo gaps that prevent information
-leakage between the training and test windows.
+walk-forward, emphasising a fixed purge plus a percentage-based extension of
+the exclusion immediately before each test window.
 Universe: canonical US sector ETFs: XLB, XLE, XLF, XLI, XLK, XLP, XLU, XLV and XLY.
 
 What this teaches: naive walk-forward can still leak — the last training bars
 sit right next to the first test bars, and an indicator's warm-up or an
-overlapping label can bleed test information backward. PURGE drops the training
-bars closest to the test window; EMBARGO adds a buffer after it. This example
-uses a generous purge/embargo so you can see their effect on the OOS metrics.
+overlapping label can bleed test information backward. The fixed purge drops
+the training bars closest to the test window; the percentage option extends
+that same pre-OOS exclusion. It is not a classical post-test embargo across
+later training folds. The historical file name is retained for compatibility.
 
 Usage:
     ./strategy.sh example_wf_03_anchored_purge_embargo
@@ -118,7 +119,7 @@ async def main() -> None:
         test_months=6,
         step_months=6,
         purge_days=10,  # drop the 10 training days nearest the test window
-        embargo_pct=0.02,  # 2% buffer after the test window
+        extra_pre_oos_purge_pct=0.02,  # extend the purge before OOS by 2% of IS
     )
     engine_kwargs = {}
     if mode == "per_fold_refit":
@@ -126,6 +127,7 @@ async def main() -> None:
         def factory(*, fold, train_start, train_end, oos_start, oos_end, **_) -> RSIReversionForWF:
             return _build_strategy(
                 strategy_name=f"ExampleWF03_AnchoredPurgeEmbargo_Fold{fold.fold_id:02d}",
+                backtest_period={"start": train_start, "end": oos_end},
             )
 
         engine_kwargs["backtester_factory"] = factory
