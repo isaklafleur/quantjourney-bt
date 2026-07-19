@@ -58,7 +58,7 @@ def test_read_bars_401_raises_value_error_mentioning_api_key(monkeypatch):
     def handler(request: httpx.Request) -> httpx.Response:
         return httpx.Response(401, text="unauthorized")
 
-    with pytest.raises(ValueError, match="QJ_LAKE_API_KEY"):
+    with pytest.raises(ValueError) as exc_info:
         lake_api.read_bars(
             "equity_bars_1d_yahoo_adj",
             tickers=["AAPL"],
@@ -66,6 +66,10 @@ def test_read_bars_401_raises_value_error_mentioning_api_key(monkeypatch):
             end=date(2024, 1, 31),
             client=_mock_client(handler),
         )
+
+    error_msg = str(exc_info.value)
+    assert "QJ_LAKE_API_KEY" in error_msg
+    assert "unauthorized" in error_msg
 
 
 def test_read_bars_404_includes_response_body(monkeypatch):

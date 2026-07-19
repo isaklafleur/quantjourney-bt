@@ -39,7 +39,8 @@ def _headers() -> dict[str, str]:
 def _raise_for_status(response: httpx.Response) -> None:
     if response.status_code == 401:
         raise ValueError(
-            f"Lake API rejected the request (401 Unauthorized) at {response.request.url}\n"
+            f"Lake API request to {response.request.url} failed "
+            f"(401 Unauthorized): {response.text}\n"
             "  Check the QJ_LAKE_API_KEY environment variable."
         )
     if response.status_code >= 400:
