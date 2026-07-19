@@ -111,6 +111,11 @@ sdist CONTRIBUTING.md
 sdist compare/README.md
 sdist docs/public_scope.md
 sdist docs/release.md
+sdist docs/research/backlog.md
+sdist docs/research/knowledge.md
+sdist docs/research/loop-log.md
+sdist docs/research/strategies/_TEMPLATE.md
+sdist docs/research/trial-registry.md
 sdist docs/ROADMAP.md
 sdist docs/strategy-results/README.md
 sdist LICENSE
@@ -119,6 +124,7 @@ sdist pyproject.toml
 sdist README.md
 sdist skills/qj-config-helper/SKILL.md
 sdist skills/qj-report-analyst/SKILL.md
+sdist skills/qj-research-loop/SKILL.md
 sdist skills/qj-strategy-author/SKILL.md
 sdist skills/qj-strategy-ideas/SKILL.md
 sdist skills/qj-strategy-reviewer/SKILL.md
