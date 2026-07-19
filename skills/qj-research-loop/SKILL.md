@@ -7,9 +7,9 @@ description: Daily systematic-strategy research pipeline step for quantjourney-b
 
 You are quantjourney-bt's research agent. Each invocation advances the
 research pipeline by **exactly one stage**, then stops. Depth over
-breadth: the target (`docs/superpowers/specs/2026-07-18-research-loop-
-design.md`) is **2-3 Shipped strategies per calendar month**, not many
-mediocre ones.
+breadth: the target
+(`docs/superpowers/specs/2026-07-18-research-loop-design.md`) is
+**2-3 Shipped strategies per calendar month**, not many mediocre ones.
 
 This loop is the primary, independent research process for this project —
 research effort has moved here from IMQuantFund's own strategy/backtest
@@ -39,10 +39,15 @@ work — **never `git add -A`**, only stage files this loop created/edited.
 
 1. **ORIENT** — read `knowledge.md`, `backlog.md`, the last ~3 registry
    rows, and the last `loop-log.md` lines. Determine today's stage from
-   the WIP slot.
+   the WIP slot by checking observable repo state: a spec exists at
+   `docs/research/strategies/<name>.md` but no `strategies/<name>.py` on
+   its research branch → next is SPEC → IMPLEMENT; the strategy code
+   exists but no registry row for it yet → next is IMPLEMENT → BACKTEST;
+   a registry row exists for this WIP idea → next is BACKTEST → REVIEW.
 2. If WIP exists, advance it one stage — see "Pipeline stages" below.
-3. Else if backlog "Ready" has a viable top idea → **PROMOTE**: move it
-   to WIP, write its spec from `docs/research/strategies/_TEMPLATE.md`,
+3. Else if backlog "Ready" has a viable top idea → **PROMOTE** (writes
+   the spec): move it to WIP, write its spec from
+   `docs/research/strategies/_TEMPLATE.md`,
    create its research branch/worktree (see "Git workflow" below). If
    the idea's data prerequisite fails (check against "Data scope"
    below), note it, move it to Blocked, take the next.
@@ -97,8 +102,9 @@ to `main` after every stage, regardless of verdict. Research notes
 carry none of the risk of shipping an unvalidated strategy in the
 sdist, so they don't need the same gate. Concretely: the loop makes two
 kinds of commits per stage — one on the research branch (code), one on
-`main` (process docs) — except at IDEATE (no branch exists yet) and
-ORIENT (read-only, no commit).
+`main` (process docs) — except at IDEATE (no branch exists yet), ORIENT
+(read-only, no commit), and PROMOTE (spec + backlog update on `main`
+only, plus creating the branch; no code commit until IMPLEMENT).
 
 ## Verdicts
 
@@ -121,9 +127,12 @@ custom evaluation code needed:
   gets rejected.
 - **Walk-forward robustness (mandatory).**
   `backtester.walkforward.WalkForwardEngine` with `WalkForwardConfig` —
-  rolling, expanding, anchored, or purged/embargoed scheme chosen per
-  the spec's evaluation plan; large Sharpe decay IS→OOS is a reject
-  signal per `qj-report-analyst`'s existing guidance.
+  rolling, expanding, or anchored scheme chosen per the spec's
+  evaluation plan, with `purge_days`/`embargo_pct` set as needed on top
+  of whichever scheme is picked (not a separate scheme; `cpcv` exists
+  as a config value but isn't implemented yet); large Sharpe decay
+  IS→OOS is a reject signal per `qj-report-analyst`'s existing
+  guidance.
 - **Deflated Sharpe, honest about trial count.**
   `backtester.walkforward.statistics.deflated_sharpe.deflated_sharpe`,
   with `n_trials` sourced by counting that strategy family's rows in

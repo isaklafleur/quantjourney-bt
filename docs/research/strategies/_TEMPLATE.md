@@ -24,9 +24,10 @@ Weight mode or order mode (per `qj-strategy-ideas`), the nearest existing
 ## Evaluation plan
 
 Written *before* the BACKTEST stage runs. Which walk-forward scheme
-(rolling / expanding / anchored / purged-embargo — see
-`backtester.walkforward.WalkForwardConfig`), the benchmark symbol for the
-IR gate, and whether a cost sweep applies (turnover-heavy strategies only).
+(rolling / expanding / anchored — see
+`backtester.walkforward.WalkForwardConfig`) plus its `purge_days`/
+`embargo_pct` settings, the benchmark symbol for the IR gate, and
+whether a cost sweep applies (turnover-heavy strategies only).
 
 ## Results
 

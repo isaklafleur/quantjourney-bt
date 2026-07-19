@@ -139,10 +139,12 @@ evaluation code needed, unlike IMQuantFund which built its own
   zero-IR result is beta and gets rejected, same rule as IMQuantFund's
   registry row 1 lesson.
 - **Walk-forward robustness (mandatory).** `backtester.walkforward.
-  WalkForwardEngine` with `WalkForwardConfig` — rolling, expanding,
-  anchored, or purged/embargoed scheme chosen per the spec's evaluation
-  plan; Sharpe decay IS→OOS is a reject signal per `qj-report-analyst`'s
-  existing guidance.
+  WalkForwardEngine` with `WalkForwardConfig` — rolling, expanding, or
+  anchored scheme chosen per the spec's evaluation plan, with
+  `purge_days`/`embargo_pct` set as needed on top of whichever scheme is
+  picked (not a separate scheme; `cpcv` exists as a config value but
+  isn't implemented yet); Sharpe decay IS→OOS is a reject signal per
+  `qj-report-analyst`'s existing guidance.
 - **Deflated Sharpe, honest about trial count.**
   `backtester.walkforward.statistics.deflated_sharpe.deflated_sharpe`,
   with `n_trials` sourced by counting that strategy family's rows in
