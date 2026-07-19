@@ -109,3 +109,25 @@ def test_read_bars_empty_result_returns_empty_dataframe(monkeypatch):
     )
     assert result.empty
     assert list(result.columns) == ["ticker", "close"]
+
+
+def test_read_features_parses_parquet_and_sends_expected_request(monkeypatch):
+    monkeypatch.setenv("QJ_LAKE_API_KEY", "test-key")
+    expected = pd.DataFrame({"ticker": ["AAPL"], "rank": [92.0]})
+    captured = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured["url"] = str(request.url)
+        return httpx.Response(200, content=_parquet_bytes(expected))
+
+    result = lake_api.read_features(
+        "sctr_features",
+        tickers=["AAPL"],
+        as_of=date(2024, 1, 31),
+        client=_mock_client(handler),
+    )
+
+    pd.testing.assert_frame_equal(result, expected)
+    assert "/api/v1/lake/features/sctr_features" in captured["url"]
+    assert "as_of=2024-01-31" in captured["url"]
+    assert "tickers=AAPL" in captured["url"]

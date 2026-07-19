@@ -29,7 +29,7 @@ import pandas as pd
 
 DEFAULT_LAKE_API_URL = "http://localhost:8000"
 
-__all__ = ["read_bars"]
+__all__ = ["read_bars", "read_features"]
 
 
 def _headers() -> dict[str, str]:
@@ -81,6 +81,26 @@ def read_bars(
     response = _get(
         f"/api/v1/lake/bars/{dataset}",
         {"tickers": ",".join(tickers), "start": start.isoformat(), "end": end.isoformat()},
+        client,
+    )
+    return pd.read_parquet(io.BytesIO(response.content))
+
+
+def read_features(
+    dataset: str,
+    *,
+    tickers: list[str],
+    as_of: date,
+    client: httpx.Client | None = None,
+) -> pd.DataFrame:
+    """Read research-tier features for `tickers`, PIT-resolved as of
+    `as_of`, via GET /api/v1/lake/features/{dataset}. Unlike read_bars,
+    `as_of` is required and caller-controlled -- the endpoint has no
+    start/end params, so callers get every event_time on record for
+    `tickers`, resolved as of `as_of`."""
+    response = _get(
+        f"/api/v1/lake/features/{dataset}",
+        {"tickers": ",".join(tickers), "as_of": as_of.isoformat()},
         client,
     )
     return pd.read_parquet(io.BytesIO(response.content))
