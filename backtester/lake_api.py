@@ -29,7 +29,7 @@ import pandas as pd
 
 DEFAULT_LAKE_API_URL = "http://localhost:8000"
 
-__all__ = ["read_bars", "read_features"]
+__all__ = ["read_bars", "read_features", "read_universe"]
 
 
 def _headers() -> dict[str, str]:
@@ -104,3 +104,19 @@ def read_features(
         client,
     )
     return pd.read_parquet(io.BytesIO(response.content))
+
+
+def read_universe(
+    name: str,
+    *,
+    as_of: date,
+    client: httpx.Client | None = None,
+) -> list[str]:
+    """Read a resolved, single-date universe membership list via
+    GET /api/v1/lake/universe/{name}. Not wired into
+    local_data.build_local_minio_bt_payload today -- resolve_pit_sp500
+    still owns day-by-day eligibility, reading the raw span table
+    directly from MinIO (see module docstring) -- but exposed for later
+    use (e.g. the research loop's IDEATE stage)."""
+    response = _get(f"/api/v1/lake/universe/{name}", {"as_of": as_of.isoformat()}, client)
+    return response.json()

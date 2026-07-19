@@ -131,3 +131,25 @@ def test_read_features_parses_parquet_and_sends_expected_request(monkeypatch):
     assert "/api/v1/lake/features/sctr_features" in captured["url"]
     assert "as_of=2024-01-31" in captured["url"]
     assert "tickers=AAPL" in captured["url"]
+
+
+def test_read_universe_parses_json_list(monkeypatch):
+    monkeypatch.setenv("QJ_LAKE_API_KEY", "test-key")
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json=["AAPL", "MSFT"])
+
+    result = lake_api.read_universe(
+        "sp500", as_of=date(2024, 1, 31), client=_mock_client(handler)
+    )
+    assert result == ["AAPL", "MSFT"]
+
+
+def test_read_universe_404_raises_value_error(monkeypatch):
+    monkeypatch.setenv("QJ_LAKE_API_KEY", "test-key")
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(404, text="unknown universe 'foo'")
+
+    with pytest.raises(ValueError, match="unknown universe"):
+        lake_api.read_universe("foo", as_of=date(2024, 1, 31), client=_mock_client(handler))
