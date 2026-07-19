@@ -111,6 +111,27 @@ def test_read_bars_empty_result_returns_empty_dataframe(monkeypatch):
     assert list(result.columns) == ["ticker", "close"]
 
 
+def test_read_bars_joins_multiple_tickers_in_request(monkeypatch):
+    monkeypatch.setenv("QJ_LAKE_API_KEY", "test-key")
+    expected = pd.DataFrame({"ticker": ["AAPL", "MSFT"], "close": [123.45, 456.78]})
+    captured = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured["url"] = str(request.url)
+        return httpx.Response(200, content=_parquet_bytes(expected))
+
+    result = lake_api.read_bars(
+        "equity_bars_1d_yahoo_adj",
+        tickers=["AAPL", "MSFT"],
+        start=date(2024, 1, 1),
+        end=date(2024, 1, 31),
+        client=_mock_client(handler),
+    )
+
+    pd.testing.assert_frame_equal(result, expected)
+    assert "tickers=AAPL%2CMSFT" in captured["url"]
+
+
 def test_read_features_parses_parquet_and_sends_expected_request(monkeypatch):
     monkeypatch.setenv("QJ_LAKE_API_KEY", "test-key")
     expected = pd.DataFrame({"ticker": ["AAPL"], "rank": [92.0]})
@@ -135,14 +156,18 @@ def test_read_features_parses_parquet_and_sends_expected_request(monkeypatch):
 
 def test_read_universe_parses_json_list(monkeypatch):
     monkeypatch.setenv("QJ_LAKE_API_KEY", "test-key")
+    captured = {}
 
     def handler(request: httpx.Request) -> httpx.Response:
+        captured["url"] = str(request.url)
         return httpx.Response(200, json=["AAPL", "MSFT"])
 
     result = lake_api.read_universe(
         "sp500", as_of=date(2024, 1, 31), client=_mock_client(handler)
     )
     assert result == ["AAPL", "MSFT"]
+    assert "/api/v1/lake/universe/sp500" in captured["url"]
+    assert "as_of=2024-01-31" in captured["url"]
 
 
 def test_read_universe_404_raises_value_error(monkeypatch):
