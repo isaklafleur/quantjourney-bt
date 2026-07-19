@@ -40,6 +40,56 @@ def _bars(
     return pd.DataFrame(rows)
 
 
+def test_build_local_minio_bt_payload_routes_bars_and_sctr_through_lake_api(monkeypatch):
+    dates = [datetime(2024, 1, d, tzinfo=UTC) for d in range(1, 4)]
+    tickers = ["AAA", "BBB"]
+    bars = _bars(tickers, dates, {"AAA": [10.0, 11.0, 12.0], "BBB": [20.0, 21.0, 22.0]})
+    spy_bars = _bars(["SPY"], dates, {"SPY": [100.0, 101.0, 102.0]})
+    sctr = pd.DataFrame(
+        [{"ticker": t, "event_time": d, "rank": 90.0} for t in tickers for d in dates]
+    )
+    calls = {}
+
+    def fake_read_bars(dataset, *, tickers, start, end, client=None):
+        calls["read_bars"] = {"dataset": dataset, "tickers": tickers, "start": start, "end": end}
+        return bars
+
+    def fake_read_features(dataset, *, tickers, as_of, client=None):
+        calls["read_features"] = {"dataset": dataset, "tickers": tickers, "as_of": as_of}
+        return sctr
+
+    def fake_read_pit(bucket, dataset, **kwargs):
+        assert dataset == "market_ref_bars_1d_yahoo_adj", (
+            f"read_pit should only be called for market_ref_bars_1d_yahoo_adj, got {dataset}"
+        )
+        return spy_bars
+
+    def fake_resolve_pit_sp500(trading_days, **kwargs):
+        return {day: {"AAA", "BBB"} for day in trading_days}
+
+    monkeypatch.setattr(local_data.lake_api, "read_bars", fake_read_bars)
+    monkeypatch.setattr(local_data.lake_api, "read_features", fake_read_features)
+    monkeypatch.setattr(local_data, "read_pit", fake_read_pit)
+    monkeypatch.setattr(local_data, "resolve_pit_sp500", fake_resolve_pit_sp500)
+
+    fixed_as_of = datetime(2024, 6, 1, tzinfo=UTC)
+    local_data.build_local_minio_bt_payload(
+        instruments=tickers,
+        start="2024-01-01",
+        end="2024-01-03",
+        as_of=fixed_as_of,
+    )
+
+    assert calls["read_bars"]["dataset"] == "equity_bars_1d_yahoo_adj"
+    assert calls["read_bars"]["tickers"] == tickers
+    assert calls["read_bars"]["start"].isoformat() == "2024-01-01"
+    assert calls["read_bars"]["end"].isoformat() == "2024-01-03"
+
+    assert calls["read_features"]["dataset"] == "sctr_features"
+    assert calls["read_features"]["tickers"] == tickers
+    assert calls["read_features"]["as_of"] == fixed_as_of.date()
+
+
 @pytest.fixture
 def patched_reads(monkeypatch):
     dates = [datetime(2024, 1, d, tzinfo=UTC) for d in range(1, 6)]
@@ -51,18 +101,24 @@ def patched_reads(monkeypatch):
         [{"ticker": t, "event_time": d, "rank": 90.0} for t in tickers for d in dates]
     )
 
+    def fake_read_bars(dataset, *, tickers, start, end, client=None):
+        assert dataset == "equity_bars_1d_yahoo_adj"
+        return bars
+
+    def fake_read_features(dataset, *, tickers, as_of, client=None):
+        assert dataset == "sctr_features"
+        return sctr
+
     def fake_read_pit(bucket, dataset, **kwargs):
-        if dataset == "equity_bars_1d_yahoo_adj":
-            return bars
         if dataset == "market_ref_bars_1d_yahoo_adj":
             return spy_bars
-        if dataset == "sctr_features":
-            return sctr
-        raise AssertionError(f"unexpected dataset requested: {dataset}")
+        raise AssertionError(f"unexpected read_pit dataset requested: {dataset}")
 
     def fake_resolve_pit_sp500(trading_days, **kwargs):
         return {day: {"AAA", "BBB"} for day in trading_days}
 
+    monkeypatch.setattr(local_data.lake_api, "read_bars", fake_read_bars)
+    monkeypatch.setattr(local_data.lake_api, "read_features", fake_read_features)
     monkeypatch.setattr(local_data, "read_pit", fake_read_pit)
     monkeypatch.setattr(local_data, "resolve_pit_sp500", fake_resolve_pit_sp500)
     return tickers, dates
@@ -111,13 +167,15 @@ def test_build_local_minio_bt_payload_marks_ineligible_names(monkeypatch):
     )
 
     monkeypatch.setattr(
+        local_data.lake_api, "read_bars", lambda dataset, **kwargs: bars
+    )
+    monkeypatch.setattr(
+        local_data.lake_api, "read_features", lambda dataset, **kwargs: sctr
+    )
+    monkeypatch.setattr(
         local_data,
         "read_pit",
-        lambda bucket, dataset, **kwargs: {
-            "equity_bars_1d_yahoo_adj": bars,
-            "market_ref_bars_1d_yahoo_adj": spy_bars,
-            "sctr_features": sctr,
-        }[dataset],
+        lambda bucket, dataset, **kwargs: spy_bars,
     )
     # BBB was never a PIT member -- only AAA should show eligibility=1
     monkeypatch.setattr(

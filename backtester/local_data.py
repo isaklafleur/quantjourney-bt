@@ -15,6 +15,7 @@ from typing import Any
 import numpy as np
 import pandas as pd
 
+from backtester import lake_api
 from backtester.bt_payload import frame_payload, series_payload
 from backtester.local_lake import read_pit, resolve_pit_sp500
 
@@ -163,15 +164,11 @@ def build_local_minio_bt_payload(
     if not tickers:
         raise ValueError("build_local_minio_bt_payload requires at least one instrument")
 
-    bars = read_pit(
-        "processed",
+    bars = lake_api.read_bars(
         "equity_bars_1d_yahoo_adj",
-        as_of=as_of,
         tickers=tickers,
         start=start_date,
         end=end_date,
-        filesystem=filesystem,
-        root=root,
     )
     if bars.empty:
         raise ValueError(f"No equity_bars_1d_yahoo_adj rows for {tickers} in [{start}, {end}]")
@@ -191,15 +188,10 @@ def build_local_minio_bt_payload(
     if spy_bars.empty:
         raise ValueError("No SPY rows in market_ref_bars_1d_yahoo_adj for the requested window")
 
-    sctr = read_pit(
-        "research",
+    sctr = lake_api.read_features(
         "sctr_features",
-        as_of=as_of,
         tickers=tickers,
-        start=start_date,
-        end=end_date,
-        filesystem=filesystem,
-        root=root,
+        as_of=as_of.date(),
     )
 
     dates = pd.DatetimeIndex(sorted(bars["event_time"].unique()))
