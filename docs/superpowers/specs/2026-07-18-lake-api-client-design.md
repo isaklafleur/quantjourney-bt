@@ -166,6 +166,19 @@ Backtester(source="minio")
   monkeypatches `build_local_minio_bt_payload` wholesale and never
   exercises the underlying reads — confirmed unaffected by this change,
   no update needed.
+- `tests/test_local_data.py` **does** need updating: its `patched_reads`
+  fixture and the other two tests monkeypatch `local_data.read_pit`
+  directly with a `fake_read_pit` that branches on all three dataset
+  names, including the two moving to HTTP
+  (`equity_bars_1d_yahoo_adj`, `sctr_features`). Once
+  `build_local_minio_bt_payload` calls `lake_api.read_bars`/
+  `lake_api.read_features` for those two, the existing fixture's fake
+  branches for them go dead and the real (network-calling) functions
+  would run instead. Fix: monkeypatch `local_data.lake_api.read_bars`
+  and `local_data.lake_api.read_features` for those two datasets
+  alongside the existing `local_data.read_pit` monkeypatch (which keeps
+  covering only `market_ref_bars_1d_yahoo_adj`), in all three tests in
+  that file.
 - One manual, non-CI integration check: run `Backtester(source="minio")`
   against the user's real, running IMQuantFund API
   (`http://localhost:8000`, confirmed live during this design) and confirm
