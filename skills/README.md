@@ -15,11 +15,14 @@ The skill gives it the conventions used by the 45 examples in `strategies/`.
 
 | Skill | Use it to |
 |:--|:--|
+| [`qj-research-loop`](qj-research-loop/SKILL.md) | Run the daily research pipeline (ideate → spec → implement → backtest → review) that drives the other skills below. |
 | [`qj-strategy-ideas`](qj-strategy-ideas/SKILL.md) | Turn an idea into a runnable strategy — weights vs orders, the nearest example, the two-method pattern. |
 | [`qj-strategy-author`](qj-strategy-author/SKILL.md) | Write a clean, focused example strategy. |
 | [`qj-strategy-reviewer`](qj-strategy-reviewer/SKILL.md) | Review a strategy for look-ahead, exposure, cost realism, and mode fit. |
 | [`qj-report-analyst`](qj-report-analyst/SKILL.md) | Read a report and its plots and judge whether the result is trustworthy. |
 | [`qj-config-helper`](qj-config-helper/SKILL.md) | Configure the engine — parameters, rebalance policy, risk overlays, granularity. |
+
+`qj-research-loop` is the one skill in this set meant to be actively invoked ("run the research loop") rather than referenced while writing a strategy by hand — the others are style guides it defers to at the right pipeline stage.
 
 ## Typical flow
 
