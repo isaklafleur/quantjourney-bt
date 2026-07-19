@@ -91,9 +91,18 @@ existing `QJ_LOCAL_LAKE_*` precedent of not reusing IMQuantFund's own
 # was: read_pit("processed", "equity_bars_1d_yahoo_adj", as_of=..., tickers=..., start=..., end=..., filesystem=..., root=...)
 bars = lake_api.read_bars("equity_bars_1d_yahoo_adj", tickers=tickers, start=start, end=end)
 
-# was: read_pit("research", "sctr_features", as_of=..., tickers=..., start=..., end=..., filesystem=..., root=...)
-sctr = lake_api.read_features("sctr_features", tickers=tickers, as_of=end)
+# was: read_pit("research", "sctr_features", as_of=as_of, tickers=..., start=..., end=..., filesystem=..., root=...)
+sctr = lake_api.read_features("sctr_features", tickers=tickers, as_of=as_of.date())
 ```
+
+`sctr`'s `as_of` must be `build_local_minio_bt_payload`'s own `as_of`
+parameter (default: `datetime.now(UTC)`, i.e. "whatever knowledge exists
+right now") — **not** `end`. That preserves the original `read_pit` call's
+exact semantic: a single knowledge-time cutoff shared across every read in
+this function, independent of the backtest's own date window. Passing
+`end` instead would silently change what "point-in-time" means for this
+one dataset. See "Known behavior differences" below for why `bars` doesn't
+get the same treatment.
 
 Unchanged:
 
@@ -121,6 +130,26 @@ Backtester(source="minio")
        -> local_lake.read_pit("market_ref_bars_1d_yahoo_adj", ...) -> MinIO (unchanged)
        -> local_lake.resolve_pit_sp500(...)                        -> MinIO (unchanged)
 ```
+
+### Known behavior differences
+
+- **Bars' knowledge-time cutoff changes.** IMQuantFund's
+  `GET /api/v1/lake/bars/{dataset}` router hardcodes
+  `pit_resolve(..., as_of=end)` server-side — the endpoint has no `as_of`
+  query param at all, only `start`/`end`. The original direct-MinIO
+  `read_pit` call used the function-level `as_of` (default: now) for bars
+  too. In practice this means bars are now PIT-resolved as of the
+  backtest's own end date rather than "as of today," so a knowledge
+  revision landing after `end` but before "now" would now be excluded
+  where it previously would have been included. This is imposed by the
+  API's contract, not a client-side choice, and not worth a follow-up:
+  revisions to already-published adjusted daily bars this late are not
+  expected in practice, and the API spec's own design intentionally ties
+  bars' PIT resolution to the query window it was built for
+  (`quantjourney-bt` backtests over historical ranges — see that spec's
+  "Endpoints" section). `sctr_features`, by contrast, keeps the original
+  now-based cutoff exactly, since `/features/{dataset}` takes `as_of` as
+  a caller-supplied parameter with no hardcoded value.
 
 ### Error handling
 
