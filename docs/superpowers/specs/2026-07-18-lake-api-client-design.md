@@ -67,10 +67,15 @@ def read_universe(name: str, *, as_of: date) -> list[str]: ...
 - `read_features` → same shape against `.../features/{dataset}?tickers=...&as_of=...`.
 - `read_universe` → same auth, JSON response (`list[str]`), against
   `.../universe/{name}?as_of=...`.
-- Synchronous `httpx.Client` (module-level, lazily constructed), matching
-  `local_lake.py`'s sync style — `_fetch_market_data` in
-  `backtester/mixins/sdk_client.py` calls `build_local_minio_bt_payload`
-  without `await`, so the data-fetch path stays sync end-to-end.
+- Synchronous `httpx.Client`, constructed fresh per call (via a context
+  manager) when no client is injected, matching `local_lake.py`'s
+  per-call `pyarrow.fs.S3FileSystem` construction pattern — request volumes
+  are low, and this avoids lifetime-management complexity. Tests inject a
+  mock client built on `httpx.MockTransport`; production callers omit it
+  and get a fresh real client. The sync-only style matches existing code:
+  `_fetch_market_data` in `backtester/mixins/sdk_client.py` calls
+  `build_local_minio_bt_payload` without `await`, so the data-fetch path
+  stays sync end-to-end.
 - `httpx` is already a core dependency (`pyproject.toml`); no new
   dependency for this module. `local_lake.py`'s `pyarrow` extra is still
   required for the two datasets that remain on MinIO.
