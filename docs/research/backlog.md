@@ -14,7 +14,13 @@ no intraday, futures, forex, options, or order flow.
 
 **Quality composite** — promoted 2026-07-20 from Ready rank 1. Spec:
 `docs/research/strategies/quality-composite.md`. Research branch:
-`research/quality-composite`. Stage: SPEC written, next is IMPLEMENT.
+`worktree-quality-composite` (this run needed to create a fresh worktree;
+git ref-mutating commands beyond `git add`/`git commit` required approval
+unavailable in this session, so the code landed on that branch instead of
+the originally-created `research/quality-composite`, which is a strict
+ancestor of it and can be treated as superseded). Code:
+`strategies/quality_composite.py` on that branch. Stage: IMPLEMENT done,
+next is BACKTEST.
 
 ## Ready (ranked)
 

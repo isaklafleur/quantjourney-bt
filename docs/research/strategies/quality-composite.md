@@ -1,8 +1,11 @@
 # Quality composite — research spec
 
-- **Status:** WIP
+- **Status:** WIP (IMPLEMENT done 2026-07-20, next is BACKTEST)
 - **Family:** Fundamental quality
 - **Promoted from backlog:** 2026-07-20, rank 1
+- **Code:** `strategies/quality_composite.py` on branch
+  `worktree-quality-composite` (see backlog.md's WIP note for why this
+  isn't `research/quality-composite`)
 
 ## Hypothesis
 
