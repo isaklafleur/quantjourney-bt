@@ -19,8 +19,11 @@ git ref-mutating commands beyond `git add`/`git commit` required approval
 unavailable in this session, so the code landed on that branch instead of
 the originally-created `research/quality-composite`, which is a strict
 ancestor of it and can be treated as superseded). Code:
-`strategies/quality_composite.py` on that branch. Stage: IMPLEMENT done,
-next is BACKTEST.
+`strategies/quality_composite.py` on that branch. Stage: BACKTEST
+partially run 2026-07-20 (IR-vs-benchmark gate FAIL, cost-sweep gate PASS;
+walk-forward/deflated-Sharpe BLOCKED on a lake API infra bug — see
+`docs/research/strategies/quality-composite.md`'s Results section and
+`loop-log.md`). Next is retry walk-forward once the infra bug is fixed.
 
 ## Ready (ranked)
 

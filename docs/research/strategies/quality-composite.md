@@ -1,6 +1,9 @@
 # Quality composite — research spec
 
-- **Status:** WIP (IMPLEMENT done 2026-07-20, next is BACKTEST)
+- **Status:** WIP (IMPLEMENT done 2026-07-20; BACKTEST partially run
+  2026-07-20 — IR-vs-benchmark and cost-sweep gates complete, walk-forward
+  (and its downstream deflated-Sharpe/PBO) blocked on a lake API infra bug;
+  next is retry walk-forward once fixed)
 - **Family:** Fundamental quality
 - **Promoted from backlog:** 2026-07-20, rank 1
 - **Code:** `strategies/quality_composite.py` on branch
@@ -97,7 +100,75 @@ Written before the BACKTEST stage runs.
 
 ## Results
 
-_Filled in at BACKTEST._
+_Partially filled in at BACKTEST (2026-07-20); walk-forward re-run pending
+an infra fix. All runs: `Backtester(source="minio")`, `benchmark_symbol=
+"SPY"`, `weight_cost_model=FixedBpsWeightCostModel(total_bps=10.0)` unless
+noted, PIT S&P 500 universe (706 tickers ever-members 2016-2026),
+2016-01-01 to 2026-07-14._
+
+**Full-period backtest** (`strategies/quality_composite.py`'s own
+`main()`, plus a re-run with `skip_analysis=True` for the gates below —
+consistent to 3 decimals): Sharpe 0.80, Sortino 1.13, CAGR 13.31%,
+Max Drawdown -33.69%, Calmar 0.40, annualized volatility 17.53%,
+annualized turnover 200.47%. Full report: `reports/QualityComposite/`
+(gitignored scratch output, not committed).
+
+**IR vs. benchmark (mandatory) — FAIL.** Benchmark returns sourced from
+`local_lake.read_pit("processed", "market_ref_bars_1d_yahoo_adj",
+tickers=["SPY"])` (2643 aligned trading days). `excess_return`: -71.0
+cumulative percentage points below SPY over the full period.
+`active_return` (annualized): -1.89%/yr. Information ratio (active
+return mean / active return std, annualized — no dedicated
+`information_ratio` helper exists in `backtester.engines.benchmark`, so
+computed directly from the aligned daily series per the module's
+`excess_return`/`active_return` primitives): **-0.26**. Despite a
+respectable absolute Sharpe, the strategy meaningfully underperforms its
+own "lazy benchmark" risk-adjusted over the full decade — this is the
+single most important finding of this BACKTEST run and a strong signal
+toward Archive at REVIEW, independent of the walk-forward blocker below.
+
+**Cost sweep (mandatory) — PASS.** Sharpe/CAGR at 0/5/10/20 bps total
+cost: 0.813/13.55%, 0.810/13.48%, 0.806/13.42%, 0.799/13.28%. Edge is not
+cost-sensitive (quarterly rebalance keeps per-trade cost drag small
+despite 200% annualized turnover) — confirms the spec's evaluation-plan
+prediction rather than overturning it.
+
+**Walk-forward robustness (mandatory) — BLOCKED, not merely failing.**
+Ran `WalkForwardEngine` per the evaluation plan (`scheme="rolling"`,
+`train_months=36`, `test_months=12`, default `purge_days=5`/
+`embargo_pct=0.01`), `backtester_factory=`-based per-fold refit (8 folds
+generated over 2016-2026). 7/8 folds failed with the *same* underlying
+cause: `lake_api.read_bars("equity_bars_1d_yahoo_adj", ...)` returns
+**zero rows whenever `end` predates roughly the last 2-3 weeks of
+wall-clock time**, independent of `start` or which tickers are
+requested — confirmed by direct bisection (as of this run, 2026-07-20:
+`end=2026-07-03` → 0 rows, `end=2026-07-04` → 5278 rows, for a 2-ticker/
+10-year probe query; the full-period backtest above only worked because
+its `end` was recent). This is a lake API server defect, not a strategy
+or PIT-handling bug — it will silently block the walk-forward gate for
+*every* future strategy in this loop that reaches BACKTEST, not just this
+one, until fixed server-side. Only fold 7 (OOS 2026-01-05→2026-07-10,
+inside the served window) produced a real result: OOS Sharpe 1.25, OOS
+CAGR 16.77%, IS Sharpe 0.86 (overfit ratio 0.69, efficiency 1.45). These
+numbers are **not** reported as a passing walk-forward result — one
+surviving fold out of eight is not evidence of robustness, it's one
+year's slice. The engine's own aggregate (`deflated_sharpe=0.81`,
+`sharpe_decay=0.0`) inherits the same single-fold reliability caveat and
+should not be read as a real DSR either.
+
+**Deflated Sharpe — BLOCKED** (same root cause; would need the full,
+multi-fold OOS series to be meaningful, not the one surviving fold's).
+
+**Overfit probability (PBO) — unavailable, as documented, not a
+defect.** `WalkForwardConfig.pbo_trials=0` (no optimizer; this strategy
+has no tuned hyperparameters to sweep) → the rank-based PBO the engine
+implements needs `pbo_trials>=2` with an optimizer; the older fold-level
+`probability_of_backtest_overfitting` is deprecated and always returns
+NaN per its own module docstring. Reported as unavailable, never as a
+reassuring 0, per the skill's hard rules.
+
+**Regime evidence:** not evaluated this run — deferred to REVIEW once
+walk-forward completes, per the spec's own plan.
 
 ## Regime evidence
 
