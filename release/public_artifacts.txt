@@ -115,6 +115,7 @@ sdist docs/research/backlog.md
 sdist docs/research/knowledge.md
 sdist docs/research/loop-log.md
 sdist docs/research/strategies/_TEMPLATE.md
+sdist docs/research/strategies/quality-composite.md
 sdist docs/research/trial-registry.md
 sdist docs/ROADMAP.md
 sdist docs/strategy-results/README.md
