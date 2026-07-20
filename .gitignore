@@ -26,6 +26,10 @@ build/
 /_requests/
 /.superpowers/
 
+# Research loop scheduling (tools/run_research_loop.sh) runtime state.
+/.research-loop.lock
+/.research-loop-logs/
+
 # Local data/cache artifacts.
 /data/
 /cache/
