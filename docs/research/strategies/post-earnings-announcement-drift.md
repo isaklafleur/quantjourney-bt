@@ -1,6 +1,6 @@
 # Post-earnings-announcement drift (PEAD) — research spec
 
-- **Status:** WIP (code written, next stage BACKTEST)
+- **Status:** WIP (BACKTEST complete, next stage REVIEW)
 - **Family:** Fundamental, event-driven
 - **Promoted from backlog:** 2026-07-21, rank 1
 
@@ -184,11 +184,80 @@ fix needed this time since the spec file was already added to
 
 ## Results
 
-Not yet run — filled in at BACKTEST.
+Infra preflight passed: Lake API `/docs` 200; MinIO `pit_sp500_ticker_universe`
+returned 709 tickers. Ran the full-period backtest (`Backtester(source="minio")`,
+2016-01-04→2026-07-20, 709-ticker PIT S&P 500 universe, daily rebalance
+(`RebalancePolicy(frequency="D")`), 10bps cost, via a scratch driver script
+importing `PostEarningsAnnouncementDrift` from `worktree-pead`, deleted after
+the run): Sharpe 0.73, Sortino 1.02, Annualized Return 11.87%, Total Return
+226.18% (print_summary) / 230.52% (independently computed from
+`equity_curve.csv`'s `net_asset_value` — same two-report-surface
+annualization-convention discrepancy on the same underlying returns already
+noted for the Low-volatility anomaly trial, not a real inconsistency), Max
+Drawdown -37.28%, Calmar 0.32, Ann. Vol 17.51%, Ann. Turnover 702.59% (by far
+the highest of any trial in this loop, as the spec anticipated for a
+turnover-heavy event strategy with daily rebalance).
+
+Mandatory IR-vs-benchmark gate: **FAIL**, the most decisive of any trial so
+far — IR -0.48, active return -2.82%/yr, cumulative excess -111.54pts vs SPY,
+2016-01-04→2026-07-20 (computed via the same `excess_return`/`active_return`-
+style aligned-daily-series method as all three prior trials, no
+`information_ratio` helper exists). Notably, the annualized tracking error
+(5.83%) is much *lower* than the low-volatility trials' (~11pts implied) —
+investigated why rather than assumed: `weights.csv` shows the strategy holds
+72 names on average (min 0, max 114) and is invested (gross exposure >0.1%)
+on 99.96% of days, mean gross exposure 0.95 — i.e. despite genuinely sparse
+*new*-entry weeks (median 7 qualifying announcements/week, per the code's own
+docstring), the fixed 60-trading-day hold means overlapping cohorts from
+consecutive entry weeks keep the book almost continuously ~95% invested
+across ~70-90 names. This is a broad, highly-diversified long book in
+practice, not the "idle most other weeks" character the code's docstring
+implies (that docstring's claim is about new-entry cadence, not net market
+exposure) — closer to the market in composition, hence lower tracking error,
+but the IR gate still fails more decisively than any prior trial because the
+active-return drag is large relative to that smaller tracking error.
+
+Mandatory cost-sweep gate: **PASS**, but the steepest degradation of any
+trial so far, as the spec anticipated — Sharpe 0.819→0.775→0.73→0.641 across
+0/5/10/20bps (a ~22% relative decay 0bps→20bps, vs. Quality composite's
+~1.7%, Low-vol's ~11%, Regime-gated's ~5%), total return 284.01%→253.92%→
+226.18%(printed)/230.52%(computed)→177.05%. Consistent with the 702.59%
+annualized turnover being far higher than any prior trial's. The edge
+survives realistic costs (stays clearly positive-Sharpe at 20bps) but is
+genuinely more cost-sensitive than every prior strategy in this loop.
+
+Mandatory walk-forward gate: **BLOCKED** — re-bisected `lake_api.read_bars`'s
+`end`-date defect before spending a full `WalkForwardEngine` run (same
+judgment call as all three prior trials): confirmed unchanged today
+(`end=2020-01-01`/`2023-06-15`/`2026-07-03` all 0 rows, `end=2026-07-21`
+returns 5300 rows) — 4th consecutive trial hitting the identical server-side
+defect. A rolling train=24mo/test=6mo walk-forward would strand nearly every
+fold's `end` outside the ~2-3-week served window, so skipped running it in
+full rather than reproduce an already-predictable non-result; DSR/PBO
+consequently also blocked/N/A.
 
 ## Regime evidence
 
-Not yet available — filled in at REVIEW.
+Gathered directly from `equity_curve.csv`'s `net_asset_value` vs. the same
+SPY series used for the IR gate (diagnostic, not a gate; PEAD's behavioral
+mechanism has no clear a-priori crisis-regime prediction, so this is
+exploratory per the spec). Mixed, not uniformly protective or exposed:
+
+- **COVID crash** (2020-02-19→2020-03-23): strategy -37.28% vs SPY -33.72%
+  (**-3.56pts**, underperformed) — the strategy was ~95% gross-invested
+  across ~72 names throughout the entire window (confirmed directly from
+  `weights.csv`, not assumed), so positions opened on pre-crash earnings
+  surprises were fully exposed to the crash alongside the broad market, with
+  no defensive mechanism to reduce that exposure — unlike the low-volatility
+  trials, which showed genuine crisis protection by construction.
+- **2022 bear market** (2022-01-03→2022-10-12): strategy -16.08% vs SPY
+  -24.50% (**+8.42pts**, outperformed) — same ~95% gross exposure held
+  throughout this window too (also confirmed from `weights.csv`), so this
+  isn't a being-in-cash effect; more likely reflects which names' SUE-driven
+  drift happened to hold up better during a slower, valuation-driven decline
+  than a market-wide panic like COVID.
+- No GFC window in range (data starts 2016-01-04), consistent with every
+  prior trial in this loop.
 
 ## Verdict & lessons
 
