@@ -1,17 +1,34 @@
 # Regime-gated low-volatility anomaly — research spec
 
-- **Status:** WIP (SPEC written; branch created, no code yet)
+- **Status:** WIP (code written, next is IMPLEMENT → BACKTEST)
 - **Family:** Technical / risk-based, regime-conditional
 - **Promoted from backlog:** 2026-07-21, rank 1
-- **Code:** none yet. Research branch/worktree
-  `worktree-regime-gated-low-vol` created via the native worktree tool
-  (same reason as `worktree-low-vol-anomaly`/`worktree-quality-composite`:
-  this session's Bash tool cannot be relied on to approve ref-mutating git
+- **Code:** `strategies/regime_gated_low_volatility_anomaly.py` written on
+  branch `worktree-regime-gated-low-vol` (native worktree tool, same
+  reason as `worktree-low-vol-anomaly`/`worktree-quality-composite`: this
+  session's Bash tool cannot be relied on to approve ref-mutating git
   commands unattended). Branched from `worktree-low-vol-anomaly`'s base
   (`main`), not from `worktree-low-vol-anomaly` itself — the two branches
-  are independent; IMPLEMENT should copy/adapt
-  `strategies/low_volatility_anomaly.py`'s vol-ranking code by hand rather
-  than merging branches. Next stage: SPEC → IMPLEMENT.
+  are independent; the vol-ranking/quintile-selection logic
+  (`_vol_panel`, the eligible-score/quintile-cutoff block) was hand-copied
+  from `strategies/low_volatility_anomaly.py` essentially unchanged, per
+  the spec's own instruction, rather than git-merging branches. Regime
+  gate reuses the `spy_trend_down` field already computed unconditionally
+  by `backtester.local_data._spy_trend_down`/`_parameters_panel` for every
+  `build_local_minio_bt_payload` call (originally added for
+  `sctr_momentum_regime_gated.py`) — no `local_data.py` change was needed.
+  Default exposure when the gate is inactive is equal-weight the full
+  PIT-eligible universe, not a direct SPY hold: `SPY` is confirmed absent
+  from `equity_bars_1d_yahoo_adj` (live probe, 2026-07-21), so holding it
+  directly would need a second foreign price series grafted into the
+  engine's core payload — a bigger change than the existing
+  "parameters"-panel-only graft this file already uses for `vol_60d`; see
+  the strategy file's module docstring for full detail. `qj-strategy-reviewer`
+  checklist run against the file (timing, data handling, weights/exposure,
+  costs, mode fit) — no issues found. Smoke-tested on 15 tickers over a
+  recent window (638 dates, 31 rebalances, all weight sums ≤ cap, all-finite
+  signals, 54/638 elevated-risk days) via the repo's existing
+  `_smoke_regime_gated.py`. Next stage: IMPLEMENT → BACKTEST.
 
 ## Hypothesis
 

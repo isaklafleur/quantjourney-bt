@@ -14,8 +14,9 @@ no intraday, futures, forex, options, or order flow.
 
 **Regime-gated low-volatility anomaly** — promoted 2026-07-21 (Ready
 rank 1). Spec: `docs/research/strategies/regime-gated-low-volatility-anomaly.md`.
-Research branch/worktree `worktree-regime-gated-low-vol` created. Stage:
-SPEC written, next is SPEC → IMPLEMENT.
+Research branch/worktree `worktree-regime-gated-low-vol` created.
+`strategies/regime_gated_low_volatility_anomaly.py` written and
+smoke-tested. Stage: code written, next is IMPLEMENT → BACKTEST.
 
 ## Ready (ranked)
 
