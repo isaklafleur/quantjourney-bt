@@ -672,6 +672,7 @@ class RebalanceEngine:
         return_w = np.zeros((n, m), dtype=np.float64)
         rebal = np.zeros(n, dtype=bool)
         nav = np.ones(n, dtype=np.float64)
+        portfolio_bar_returns = np.zeros(n, dtype=np.float64)
 
         # Benchmark returns for tracking-error trigger
         bench_ret: np.ndarray | None = None
@@ -731,6 +732,7 @@ class RebalanceEngine:
                         rebal[i] = True
                         turnover_ring.append(float(np.abs(current_w - prev_w).sum()))
                         day_ret = (prev_w * ret[i]).sum()
+                        portfolio_bar_returns[i] = day_ret
                         nav[i] = nav[i - 1] * (1.0 + day_ret)
                         peak_nav = max(peak_nav, nav[i])
                         continue
@@ -745,6 +747,7 @@ class RebalanceEngine:
                 actual_w[i] = current_w
                 turnover_ring.append(0.0)
                 day_ret = (current_w * ret[i]).sum()
+                portfolio_bar_returns[i] = day_ret
                 nav[i] = nav[i - 1] * (1.0 + day_ret) if i > 0 else 1.0
                 peak_nav = max(peak_nav, nav[i])
                 continue
@@ -787,9 +790,7 @@ class RebalanceEngine:
                 # return_w holds beginning-of-day weights — the same basis the
                 # NAV accounting uses; actual_w already embeds day j's move.
                 window = self.policy.tracking_error_window
-                port_ret_window = np.array(
-                    [(return_w[j] * ret[j]).sum() for j in range(i - window, i)]
-                )
+                port_ret_window = portfolio_bar_returns[i - window : i]
                 bench_window = bench_ret[i - window : i]
                 active_ret = port_ret_window - bench_window
                 te_ann = float(np.std(active_ret, ddof=1)) * np.sqrt(self.periods_per_year)
@@ -902,6 +903,7 @@ class RebalanceEngine:
                 period_w = self._clean_vector(current_w)
             return_w[i] = period_w
             day_ret = (period_w * ret[i]).sum()
+            portfolio_bar_returns[i] = day_ret
             nav[i] = nav[i - 1] * (1.0 + day_ret) if i > 0 else 1.0
             peak_nav = max(peak_nav, nav[i])
 

@@ -1,5 +1,16 @@
 # QuantJourney Backtester Changelog
 
+## 0.12.4 - 2026-07-21
+
+### Changed
+- Deferred optional reporting and plotting imports until their public exports
+  are requested, removing their startup cost from lightweight backtests.
+- Pre-aligned simulator OHLCV data as NumPy arrays and preallocated ledger
+  history while preserving execution callbacks and accounting results.
+- Cached immutable contract specifications, vectorized inverse-volatility
+  estimation, reduced risk-parity pandas indexing, and reused rolling
+  portfolio returns for tracking-error checks.
+
 ## 0.12.3 - 2026-07-19
 
 ### Added

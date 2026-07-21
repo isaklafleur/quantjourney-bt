@@ -1878,7 +1878,10 @@ class Backtester(SDKClientMixin, ReportingMixin):
 
     def _contract_spec(self, instrument: str) -> ContractSpec:
         key = str(instrument).upper()
-        spec = self.contract_specs.get(key, get_contract_spec(key))
+        spec = self.contract_specs.get(key)
+        if spec is None:
+            spec = get_contract_spec(key)
+            self.contract_specs[key] = spec
         spec.validate_settlement_currency(self.base_currency)
         return spec
 

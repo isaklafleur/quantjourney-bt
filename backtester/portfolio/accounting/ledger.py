@@ -85,10 +85,15 @@ class PortfolioLedger:
         self.initial_cash = float(initial_cash)
         self.instruments = list(instruments)
         self.settlement_currency = settlement_currency
+        self._contract_specs: dict[str, ContractSpec] = {}
 
         def _validated_contract_spec(instrument: str) -> ContractSpec:
-            spec = contract_spec_resolver(instrument)
-            spec.validate_settlement_currency(self.settlement_currency)
+            key = str(instrument)
+            spec = self._contract_specs.get(key)
+            if spec is None:
+                spec = contract_spec_resolver(instrument)
+                spec.validate_settlement_currency(self.settlement_currency)
+                self._contract_specs[key] = spec
             return spec
 
         self._contract_spec = _validated_contract_spec
@@ -115,7 +120,33 @@ class PortfolioLedger:
         self._exposure_value_rows = []
         self._average_entry_rows = []
         self._margin_rows = []
+        self._history_index: pd.Index | None = None
+        self._history_cursor = 0
+        self._history_nav: np.ndarray | None = None
+        self._history_cash: np.ndarray | None = None
+        self._history_positions: np.ndarray | None = None
+        self._history_position_values: np.ndarray | None = None
+        self._history_exposure_values: np.ndarray | None = None
+        self._history_average_entry: np.ndarray | None = None
+        self._history_margin: np.ndarray | None = None
         self._last_nav = self.initial_cash
+
+    def prepare_history(self, dates: Sequence[object] | pd.Index) -> None:
+        """Preallocate a fixed-size recording buffer for a simulator run."""
+        # Reconstruct from scalar labels so ``result()`` retains the legacy
+        # index metadata (notably DatetimeIndex.freq=None from appended rows).
+        index = pd.Index(list(dates))
+        rows = len(index)
+        columns = len(self.instruments)
+        self._history_index = index
+        self._history_cursor = 0
+        self._history_nav = np.empty(rows, dtype=float)
+        self._history_cash = np.empty(rows, dtype=float)
+        self._history_positions = np.empty((rows, columns), dtype=float)
+        self._history_position_values = np.empty((rows, columns), dtype=float)
+        self._history_exposure_values = np.empty((rows, columns), dtype=float)
+        self._history_average_entry = np.empty((rows, columns), dtype=float)
+        self._history_margin = np.empty((rows, columns), dtype=float)
 
     def contract_spec(self, instrument: str) -> ContractSpec:
         """Resolve the immutable contract specification for an instrument."""
@@ -315,44 +346,111 @@ class PortfolioLedger:
     ) -> None:
         """Append one end-of-bar accounting snapshot."""
         margin = self.margin_by_instrument(prices)
+        exposure_values = self.exposure_values(prices)
+        if self._history_index is not None:
+            row = self._history_cursor
+            if row >= len(self._history_index):
+                raise RuntimeError("portfolio history buffer is full")
+            if date != self._history_index[row]:
+                raise ValueError(
+                    "portfolio history date does not match the prepared simulation index"
+                )
+            assert self._history_nav is not None
+            assert self._history_cash is not None
+            assert self._history_positions is not None
+            assert self._history_position_values is not None
+            assert self._history_exposure_values is not None
+            assert self._history_average_entry is not None
+            assert self._history_margin is not None
+            self._history_nav[row] = float(nav)
+            self._history_cash[row] = float(self.cash)
+            for column, instrument in enumerate(self.instruments):
+                self._history_positions[row, column] = float(self.positions.get(instrument, 0.0))
+                self._history_position_values[row, column] = float(
+                    position_values.get(instrument, 0.0)
+                )
+                self._history_exposure_values[row, column] = float(
+                    exposure_values.get(instrument, 0.0)
+                )
+                average_entry = self.average_entry_price.get(instrument)
+                self._history_average_entry[row, column] = (
+                    np.nan if average_entry is None else float(average_entry)
+                )
+                self._history_margin[row, column] = float(margin.get(instrument, 0.0))
+            self._history_cursor += 1
+            return
         self._dates.append(date)
         self._nav_rows.append(float(nav))
         self._cash_rows.append(float(self.cash))
         self._position_rows.append(dict(self.positions))
         self._position_value_rows.append(dict(position_values))
-        self._exposure_value_rows.append(self.exposure_values(prices))
+        self._exposure_value_rows.append(exposure_values)
         self._average_entry_rows.append(dict(self.average_entry_price))
         self._margin_rows.append(margin)
 
     def result(self) -> LedgerResult:
         """Build immutable pandas outputs and validate their identity."""
-        index = pd.Index(self._dates)
-        nav = pd.Series(self._nav_rows, index=index, dtype=float, name="nav")
-        cash = pd.Series(self._cash_rows, index=index, dtype=float, name="cash")
-        positions = pd.DataFrame(
-            self._position_rows, index=index, columns=self.instruments, dtype=float
-        ).fillna(0.0)
-        position_values = pd.DataFrame(
-            self._position_value_rows,
-            index=index,
-            columns=self.instruments,
-            dtype=float,
-        ).fillna(0.0)
-        exposure_values = pd.DataFrame(
-            self._exposure_value_rows,
-            index=index,
-            columns=self.instruments,
-            dtype=float,
-        ).fillna(0.0)
-        average_entry = pd.DataFrame(
-            self._average_entry_rows,
-            index=index,
-            columns=self.instruments,
-            dtype=float,
-        )
-        margin_by_instrument = pd.DataFrame(
-            self._margin_rows, index=index, columns=self.instruments, dtype=float
-        ).fillna(0.0)
+        if self._history_index is not None:
+            rows = slice(0, self._history_cursor)
+            index = self._history_index[rows]
+            assert self._history_nav is not None
+            assert self._history_cash is not None
+            assert self._history_positions is not None
+            assert self._history_position_values is not None
+            assert self._history_exposure_values is not None
+            assert self._history_average_entry is not None
+            assert self._history_margin is not None
+            nav = pd.Series(self._history_nav[rows].copy(), index=index, name="nav")
+            cash = pd.Series(self._history_cash[rows].copy(), index=index, name="cash")
+            positions = pd.DataFrame(
+                self._history_positions[rows].copy(), index=index, columns=self.instruments
+            )
+            position_values = pd.DataFrame(
+                self._history_position_values[rows].copy(),
+                index=index,
+                columns=self.instruments,
+            )
+            exposure_values = pd.DataFrame(
+                self._history_exposure_values[rows].copy(),
+                index=index,
+                columns=self.instruments,
+            )
+            average_entry = pd.DataFrame(
+                self._history_average_entry[rows].copy(),
+                index=index,
+                columns=self.instruments,
+            )
+            margin_by_instrument = pd.DataFrame(
+                self._history_margin[rows].copy(), index=index, columns=self.instruments
+            )
+        else:
+            index = pd.Index(self._dates)
+            nav = pd.Series(self._nav_rows, index=index, dtype=float, name="nav")
+            cash = pd.Series(self._cash_rows, index=index, dtype=float, name="cash")
+            positions = pd.DataFrame(
+                self._position_rows, index=index, columns=self.instruments, dtype=float
+            ).fillna(0.0)
+            position_values = pd.DataFrame(
+                self._position_value_rows,
+                index=index,
+                columns=self.instruments,
+                dtype=float,
+            ).fillna(0.0)
+            exposure_values = pd.DataFrame(
+                self._exposure_value_rows,
+                index=index,
+                columns=self.instruments,
+                dtype=float,
+            ).fillna(0.0)
+            average_entry = pd.DataFrame(
+                self._average_entry_rows,
+                index=index,
+                columns=self.instruments,
+                dtype=float,
+            )
+            margin_by_instrument = pd.DataFrame(
+                self._margin_rows, index=index, columns=self.instruments, dtype=float
+            ).fillna(0.0)
         margin_used = margin_by_instrument.sum(axis=1).rename("margin_used")
         buying_power = (nav - margin_used).rename("buying_power")
         book_weights = weights_from_position_values(position_values, nav)
