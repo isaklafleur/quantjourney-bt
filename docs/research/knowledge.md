@@ -14,6 +14,9 @@ trial contradicts it, note the contradiction instead.
 - **`quality_features.knowledge_time` is genuinely spread across 2009-2026** (fiscal-year-end-anchored), unlike `equity_bars_1d_yahoo_adj`/`sctr_features` whose `knowledge_time` is bulk-clustered near "now" from a recent backfill — don't assume every lake dataset shares the same knowledge_time distribution when reasoning about PIT joins.
 - **`build_local_minio_bt_payload` has no generic hook for research-tier features** (only `sctr_features` is wired into the "parameters" panel) — a strategy needing `quality_features`/`roic_features`/`value_features`/`earnings_surprise` must override `_fetch_market_data` itself (see `strategies/quality_composite.py` on branch `worktree-quality-composite` for the pattern) until this becomes a real extension point in `local_data.py`.
 - **In unattended/scheduled loop runs, the Bash tool can deny approval for `uv run`, `curl`, `cd <dir> &&`, and `git -C`/`--git-dir` targeting the research worktree — even for read-only commands — with no user present to grant it.** When this happens, code execution and network reachability checks are entirely unavailable for that run. The loop should log the blocker honestly rather than retry-loop, and should still act on already-established real results from a prior run (e.g. a completed mandatory gate) instead of stalling WIP indefinitely on that basis alone.
+- **The lake API's recency defect isn't limited to `read_bars`'s `end` param — `read_features`'s `as_of` param has the identical shape**: any `as_of` outside roughly the last 2-3 weeks of wall-clock time returns zero rows (confirmed via bisection on `technical_features`, Low-volatility anomaly IMPLEMENT 2026-07-21). Work around it the same way for any research-tier feature read: always pass `as_of=datetime.now(UTC).date()`, since the real history comes back inside that one call regardless of the dates you actually need.
+- **`technical_features`' `knowledge_time` is bulk-clustered near "now"** (recent-backfill artifact), unlike `quality_features`' genuinely-spread-across-history `knowledge_time` — confirmed for `vol_60d` specifically (Low-volatility anomaly IMPLEMENT 2026-07-21). Pivot technical-feature columns directly on `event_time`, not knowledge_time-forward-filled, mirroring how `local_data._sctr_rank_panel` already treats `sctr_features`. Don't assume every research-tier dataset shares one `knowledge_time` behavior — check per-dataset, as `quality_features` already taught the opposite lesson.
+- **A mandatory-gate failure (IR vs. benchmark) doesn't automatically mean a risk-based/structural hypothesis is wrong — check regime evidence before defaulting to Archive.** Low-volatility anomaly failed the full-period IR gate more decisively than Quality composite (-0.41 vs -0.26) yet showed genuine, real downside protection in both available crisis windows (COVID +3.09pts, 2022 bear +11.74pts vs SPY) — the mechanism works as the risk-based hypothesis predicts, it's just net negative over a sample dominated by a long bull stretch between crises. This is a qualitatively different failure mode from Quality composite (which showed no compensating regime evidence at all, since its OOS run never reached crisis-analysis) and justifies **Improve** (regime-gate the exposure) rather than Archive. Read the regime evidence, not just the gate's pass/fail, before choosing a verdict.
 
 ## Avoid list
 
@@ -37,8 +40,21 @@ have behaved in specific market regimes, gathered across trials. Diagnostic,
 not a gate; see the design spec's "Regime evidence" note for why this
 project doesn't use IMQuantFund's a-priori regime taxonomy.
 
-_None gathered yet. Quality composite (REVIEW 2026-07-20) never reached
-crisis-analysis — its walk-forward/OOS run was blocked by the lake API
-infra defect noted above, and the mandatory IR gate had already failed
-decisively enough that REVIEW proceeded to Archive without waiting on it.
-Next strategy to clear IR + walk-forward should populate this properly._
+**Low-volatility anomaly** (REVIEW 2026-07-21, computed directly from
+`equity_curve.csv` vs. the same SPY series used for the IR gate — real
+numbers, first crisis-analysis data this loop has recorded): the
+lowest-60d-vol quintile showed genuine downside protection in both
+available crisis windows — COVID crash (2020-02-19→2020-03-23) -30.31%
+vs SPY -33.40% (**+3.09pts**), 2022 bear market (2022-01-03→2022-10-12)
+-12.32% vs SPY -24.06% (**+11.74pts**). No GFC window in range (data
+starts 2016-01-04). This is the classic low-vol defensive signature and
+confirms the risk-based hypothesis's mechanism even though the strategy
+failed its full-period mandatory IR gate — the two aren't in tension,
+they describe different parts of the same cycle (defensive in crises,
+drag during the leverage-fueled bull stretches between them). Motivated
+an Improve verdict (regime-gate the exposure) rather than Archive.
+
+Quality composite (REVIEW 2026-07-20) never reached crisis-analysis —
+its walk-forward/OOS run was blocked by the lake API infra defect noted
+above, and the mandatory IR gate had already failed decisively enough
+that REVIEW proceeded to Archive without waiting on it.

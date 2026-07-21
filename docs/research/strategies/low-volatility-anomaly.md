@@ -1,6 +1,8 @@
 # Low-volatility anomaly — research spec
 
-- **Status:** WIP
+- **Status:** Reviewed — verdict **Improve** (2026-07-21). Branch
+  `worktree-low-vol-anomaly` stays alive, not merged; a regime-gated
+  follow-up idea was spawned to the backlog.
 - **Family:** Technical / risk-based
 - **Promoted from backlog:** 2026-07-20, rank 1
 - **Code:** `strategies/low_volatility_anomaly.py` written 2026-07-21 on
@@ -201,7 +203,37 @@ reached crisis-analysis).
 
 ## Verdict & lessons
 
-Deferred to REVIEW (next stage: BACKTEST → REVIEW) — this file records
-BACKTEST's real, already-decisive results; the registry row, formal
-verdict, and `knowledge.md` distillation happen in that separate run per
-the skill's one-stage-per-run rule.
+**Verdict: Improve** (REVIEW 2026-07-21, registry row appended to
+`trial-registry.md`). The mandatory IR-vs-benchmark gate fails
+decisively over the full 2016-2026 period (IR -0.41, worse than Quality
+composite's -0.26) — on its own, that would be Archive grounds
+identical to Quality composite. What distinguishes this trial is the
+regime evidence: the strategy shows real, meaningful downside protection
+in both available crisis windows (COVID +3.09pts, 2022 bear +11.74pts
+vs SPY), which is exactly what the risk-based hypothesis predicts. The
+full-period failure isn't evidence the mechanism is absent — it's
+evidence that 2016-2026 is dominated by a long leverage-fueled bull
+stretch between crises, where an *unconditional* low-vol tilt drags on
+absolute return relative to a lazy SPY benchmark even while it's doing
+exactly what it's supposed to do during drawdowns.
+
+That points to a specific, concrete variant worth testing rather than a
+vague "try again" — regime-gate the exposure: hold the low-vol quintile
+only when a regime signal indicates elevated risk (e.g. an SPY-trend or
+realized-vol-level gate, the same structural pattern already shipped in
+`strategies/sctr_momentum_regime_gated.py`), and default to full-market/
+cash exposure otherwise, rather than running the screen unconditionally
+across the whole sample. This is a mechanism change motivated directly
+by this trial's own regime evidence, not a curve-fit parameter tweak.
+
+Spawned as a new Ready-backlog idea ("Regime-gated low-volatility
+anomaly", see `backlog.md`), referencing this spec and branch. The
+`worktree-low-vol-anomaly` branch is left alive (not merged, not
+deleted) per the Improve verdict's git action — a future WIP slot can
+build on `strategies/low_volatility_anomaly.py` directly rather than
+starting from scratch.
+
+Walk-forward/DSR/PBO remain blocked by the lake API recency defect
+(`knowledge.md`) — unresolved from BACKTEST, doesn't change this
+verdict since the mandatory IR gate had already produced a real,
+decisive result on its own.
