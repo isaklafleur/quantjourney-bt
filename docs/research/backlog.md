@@ -12,18 +12,11 @@ no intraday, futures, forex, options, or order flow.
 
 ## WIP (max 1)
 
-**Quality composite** — promoted 2026-07-20 from Ready rank 1. Spec:
-`docs/research/strategies/quality-composite.md`. Research branch:
-`worktree-quality-composite` (this run needed to create a fresh worktree;
-git ref-mutating commands beyond `git add`/`git commit` required approval
-unavailable in this session, so the code landed on that branch instead of
-the originally-created `research/quality-composite`, which is a strict
-ancestor of it and can be treated as superseded). Code:
-`strategies/quality_composite.py` on that branch. Stage: BACKTEST
-partially run 2026-07-20 (IR-vs-benchmark gate FAIL, cost-sweep gate PASS;
-walk-forward/deflated-Sharpe BLOCKED on a lake API infra bug — see
-`docs/research/strategies/quality-composite.md`'s Results section and
-`loop-log.md`). Next is retry walk-forward once the infra bug is fixed.
+_Empty._ Quality composite REVIEWed and **Archived** 2026-07-20 — failed
+the mandatory IR-vs-benchmark gate (IR -0.26); walk-forward never
+completed (lake API infra defect) but the IR failure alone was decisive.
+See `trial-registry.md` and `docs/research/strategies/quality-composite.md`.
+Next run's PROMOTE should take Ready rank 1 (Low-volatility anomaly).
 
 ## Ready (ranked)
 
@@ -41,6 +34,12 @@ different structural twist — `strategies/sctr_momentum_regime_gated.py` alread
 ships that idea (SCTR rank + SPY-trend regime gate); re-proposing it here without
 a real mechanism change would just be relitigating a Shipped strategy, not a new
 idea.
+
+Explicitly avoided: `gross_profitability` (z-score) + `accruals` (z-score),
+averaged, top-quartile long, quarterly rebal — tried as "Quality composite",
+Archived 2026-07-20 (failed the mandatory IR-vs-benchmark gate, IR -0.26).
+See `knowledge.md`'s Avoid list. A differently-combined quality signal (e.g.
+idea #4 below) is not excluded by this.
 
 ## Blocked
 

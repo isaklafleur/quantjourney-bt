@@ -1,9 +1,15 @@
 # Quality composite — research spec
 
-- **Status:** WIP (IMPLEMENT done 2026-07-20; BACKTEST partially run
-  2026-07-20 — IR-vs-benchmark and cost-sweep gates complete, walk-forward
-  (and its downstream deflated-Sharpe/PBO) blocked on a lake API infra bug;
-  next is retry walk-forward once fixed)
+- **Status:** Archived (REVIEW completed 2026-07-20). Mandatory
+  IR-vs-benchmark gate **FAILED** (IR -0.26). Mandatory walk-forward gate
+  never completed — blocked across this WIP's entire BACKTEST-stage
+  lifetime (3 attempts) by a lake API `read_bars` server defect, and this
+  final run additionally couldn't execute any code or reach the network at
+  all (session-level Bash approval unavailable, unattended run). REVIEW
+  proceeded anyway: the IR failure is decisive and complete on its own
+  real data, and a mandatory gate already failing is sufficient grounds for
+  Archive regardless of the incomplete walk-forward. See
+  `trial-registry.md` and `knowledge.md`.
 - **Family:** Fundamental quality
 - **Promoted from backlog:** 2026-07-20, rank 1
 - **Code:** `strategies/quality_composite.py` on branch
@@ -172,8 +178,43 @@ walk-forward completes, per the spec's own plan.
 
 ## Regime evidence
 
-_Filled in at REVIEW._
+Not gathered. The walk-forward/crisis-analysis run needed to produce this
+never completed (blocked by the lake API `end`-date infra defect — see
+Results — across all 3 BACKTEST-stage attempts). Since the mandatory
+IR-vs-benchmark gate had already failed decisively, REVIEW proceeded to
+Archive without waiting further on this diagnostic. If this quality-factor
+family is revisited (e.g. a differently-combined variant), gather regime
+evidence properly rather than reusing this gap.
 
 ## Verdict & lessons
 
-_Filled in at REVIEW._
+**Verdict: Archive.** The mandatory IR-vs-benchmark gate failed decisively
+— IR -0.26, -71 cumulative percentage points vs. SPY over 2016-2026 —
+despite a respectable-looking absolute Sharpe (0.80) and CAGR (13.31%):
+this is beta, not alpha. Per the skill's hard rules, a mandatory gate
+failure is grounds for Archive on its own; the cadence target is never a
+reason to loosen a gate, and a still-incomplete walk-forward gate (blocked
+by an external lake API server defect for this WIP's entire lifetime, see
+Results) doesn't change an already-decisive outcome. Cost-sweep passing
+confirms the (nonexistent) edge wasn't cost-sensitive, which isn't useful
+information once IR has already failed.
+
+Lessons (distilled into `knowledge.md`):
+- Always check IR vs. benchmark before trusting absolute Sharpe/CAGR —
+  this strategy would have looked shippable on those two numbers alone.
+- `quality_features` is live via the lake API despite the module
+  docstring saying otherwise; `gross_profitability` is null ~50-58% of
+  rows; `quality_features.knowledge_time` is spread across 2009-2026
+  unlike bars/`sctr_features`; `build_local_minio_bt_payload` has no
+  generic research-tier-feature hook.
+- The lake API's `read_bars` `end`-date defect (zero rows for `end`
+  outside ~last 2-3 weeks of wall-clock time) will affect every future
+  strategy reaching BACKTEST, not just this one — flagged repeatedly in
+  `loop-log.md`, never fixed server-side within this WIP's lifetime.
+
+**Git disposition:** branch `worktree-quality-composite` (research branch
+`research/quality-composite` is its superseded ancestor) is **parked, not
+deleted** — this was an unattended run with no user present to confirm a
+destructive branch deletion, and disposal is explicitly a judgment call
+per the skill. A human can delete both branches/worktrees later if
+desired; nothing further will happen to them from this loop.
