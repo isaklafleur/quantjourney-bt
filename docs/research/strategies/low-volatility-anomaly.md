@@ -3,12 +3,22 @@
 - **Status:** WIP
 - **Family:** Technical / risk-based
 - **Promoted from backlog:** 2026-07-20, rank 1
-- **Code:** none yet — next stage is SPEC → IMPLEMENT, on branch
-  `worktree-low-vol-anomaly` (created via the native worktree tool, same
-  reason as `worktree-quality-composite`: this session's Bash tool cannot
-  be relied on to approve ref-mutating git commands unattended, so the
-  research branch lives under the `worktree-<slug>` naming pattern rather
-  than `research/<slug>`).
+- **Code:** `strategies/low_volatility_anomaly.py` written 2026-07-21 on
+  branch `worktree-low-vol-anomaly` (created via the native worktree tool,
+  same reason as `worktree-quality-composite`: this session's Bash tool
+  cannot be relied on to approve ref-mutating git commands unattended, so
+  the research branch lives under the `worktree-<slug>` naming pattern
+  rather than `research/<slug>`). Next stage: IMPLEMENT → BACKTEST.
+- **Data verification (resolved at IMPLEMENT, see the strategy file's
+  module docstring for full detail):** `vol_60d` confirmed live in
+  `technical_features` (annualized trailing realized vol, values ~0.006-0.08
+  on a 2-name probe). `technical_features`' `knowledge_time` is
+  bulk-clustered near "now" (recent-backfill artifact), NOT spread across
+  history like `quality_features` — so `vol_60d` is pivoted directly on
+  `event_time`, not knowledge_time-forward-filled. Also confirmed the lake
+  API's recency defect (`knowledge.md`) extends to `read_features`'s
+  `as_of` param, not just `read_bars`'s `end` — worked around the same way
+  Quality composite works around it (always `as_of=now`).
 
 ## Hypothesis
 

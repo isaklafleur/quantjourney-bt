@@ -16,9 +16,9 @@ no intraday, futures, forex, options, or order flow.
 written: `docs/research/strategies/low-volatility-anomaly.md`. Research
 branch/worktree: `worktree-low-vol-anomaly` (native worktree tool used,
 same `worktree-<slug>` naming as Quality composite — see that spec for
-why `research/<slug>` isn't used in this environment). Data prerequisite
-check passed: `vol_60d` is directly in `technical_features`, within data
-scope. Next stage: SPEC → IMPLEMENT.
+why `research/<slug>` isn't used in this environment). Code written
+2026-07-21: `strategies/low_volatility_anomaly.py`, smoke-tested and
+committed on the research branch. Next stage: IMPLEMENT → BACKTEST.
 
 ## Ready (ranked)
 
