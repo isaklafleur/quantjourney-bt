@@ -16,7 +16,15 @@ no intraday, futures, forex, options, or order flow.
 rank 1). Spec: `docs/research/strategies/regime-gated-low-volatility-anomaly.md`.
 Research branch/worktree `worktree-regime-gated-low-vol` created.
 `strategies/regime_gated_low_volatility_anomaly.py` written and
-smoke-tested. Stage: code written, next is IMPLEMENT → BACKTEST.
+smoke-tested. BACKTEST run 2026-07-21: mandatory IR-vs-benchmark gate
+**FAIL** (IR -0.41, active return -3.54%/yr vs SPY), cost-sweep **PASS**,
+walk-forward **BLOCKED** (same lake API recency defect as both prior
+trials). Regime evidence shows diminished-but-real crisis protection
+(COVID +1.87pts, 2022 bear +7.27pts vs SPY, both smaller than the
+ungated version's +3.09/+11.74pts) — the SPY-200d-SMA gate lags fast
+crashes (only active 16/24 COVID days) more than slow ones (153/196
+2022-bear days). Full detail in the spec's Results section. Stage: next
+is BACKTEST → REVIEW.
 
 ## Ready (ranked)
 

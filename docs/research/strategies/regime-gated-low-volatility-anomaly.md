@@ -1,6 +1,7 @@
 # Regime-gated low-volatility anomaly — research spec
 
-- **Status:** WIP (code written, next is IMPLEMENT → BACKTEST)
+- **Status:** WIP (BACKTEST run 2026-07-21 — IR gate FAIL, cost-sweep
+  PASS, walk-forward BLOCKED; next is BACKTEST → REVIEW)
 - **Family:** Technical / risk-based, regime-conditional
 - **Promoted from backlog:** 2026-07-21, rank 1
 - **Code:** `strategies/regime_gated_low_volatility_anomaly.py` written on
@@ -151,7 +152,86 @@ Written before the BACKTEST stage runs.
 
 ## Results
 
-_Not yet run — filled in at BACKTEST._
+BACKTEST run 2026-07-21. Infra preflight passed (Lake API `/docs` 200;
+MinIO `pit_sp500_ticker_universe` returned 709 tickers). Full-period run
+(`RegimeGatedLowVolatilityAnomaly(source="minio")`, 2016-01-01 →
+2026-07-21, 709-ticker PIT S&P 500 universe, monthly `BME` rebalance,
+10bps weight cost): Sharpe 0.80, Total Return 216.53%, CAGR 11.58%, Max
+Drawdown -31.81%, Ann. Volatility 15.10%, Ann. Turnover 285.30% (lower
+than the ungated version's 370.88% — full-market weighting on calm days
+turns over less than running the vol-quintile screen unconditionally,
+but still higher than Quality composite's 200%, since the regime gate's
+own on/off flips add roster churn on top of the quintile's own drift).
+Regime gate active (elevated-risk / low-vol-quintile held) on 449/2650
+trading days (~17%) over the full window.
+
+- **Mandatory IR-vs-benchmark gate: FAIL.** Computed identically to both
+  prior trials (`excess_return`/`active_return`-style aligned-series
+  math against `local_lake.read_pit`-sourced SPY daily returns,
+  2016-01-01→2026-07-21, 2644 aligned trading days): annualized active
+  return -3.54%/yr, annualized tracking error 8.63%, **IR -0.41**
+  (numerically close to the ungated version's -0.41 despite different
+  underlying active-return/tracking-error components — a coincidence in
+  the ratio, not a sign the gate did nothing; turnover, drawdown, and
+  the regime-evidence numbers below all differ from the ungated run),
+  cumulative excess return -123.41pts over the decade. The regime gate
+  did **not** clear the mandatory IR gate the ungated version failed —
+  full-market default exposure during the ~83% of calm days still drags
+  on relative return versus lazy SPY beta, just via a different
+  mechanism (beta-neutral-ish broad-market exposure instead of a
+  concentrated low-vol tilt).
+- **Mandatory cost-sweep gate: PASS.** Ran the strategy directly
+  (`save_portfolio_plots=False`/`show_text_reports=False` for speed) at
+  0/5/10/20bps total weight cost: Sharpe 0.824 → 0.813 → 0.802 → 0.780,
+  total return 227.92% → 222.17% → 216.53% → 205.52%. Degrades smoothly;
+  the added regime-gate-flip turnover doesn't make the strategy
+  meaningfully more cost-sensitive than the ungated version.
+- **Mandatory walk-forward gate: BLOCKED, same confirmed infra defect as
+  both prior trials.** Re-bisected `lake_api.read_bars` before spending a
+  full `WalkForwardEngine` run against a known-bad server (same judgment
+  call as both prior trials' BACKTEST stages): `end=2020-01-01` → 0
+  rows, `end=2023-06-15` → 0 rows, `end=2026-07-03` → 0 rows,
+  `end=2026-07-21` → 5300 rows — the `knowledge.md` defect (zero rows
+  for any `end` outside roughly the last 2-3 weeks of wall-clock time)
+  is unchanged and confirmed to still apply today, for the third
+  consecutive trial. A rolling train=24mo/test=6mo walk-forward over
+  2016-2026 would fail nearly every fold identically, so a full run was
+  skipped as not worth the runtime to reproduce an already-predictable
+  result. Deflated Sharpe and PBO are consequently also blocked/
+  unavailable (PBO's unavailability is separately expected: no
+  optimizer, no tuned params). `n_trials` for this family's eventual DSR
+  once the walk-forward gate is unblocked is counted honestly from
+  `trial-registry.md` at REVIEW (this is the 3rd trial in "Technical /
+  risk-based": SCTR-momentum-regime-gated was Shipped before this loop
+  existed and isn't in the registry, Low-volatility anomaly is row 1,
+  so registry `n_trials=2` for this row, per the spec's own Evaluation
+  plan above).
+- **Regime evidence (diagnostic, computed from `equity_curve.csv` vs. the
+  same SPY series used for the IR gate — real numbers, ahead of the
+  formal REVIEW distillation below):**
+  - COVID crash (2020-02-19 → 2020-03-23): strategy -31.53% vs. SPY
+    -33.40% — **+1.87pts** of downside protection (less than the
+    ungated version's +3.09pts).
+  - 2022 bear market (2022-01-03 → 2022-10-12): strategy -16.78% vs.
+    SPY -24.06% — **+7.27pts** of downside protection (less than the
+    ungated version's +11.74pts).
+  - No GFC window in range (data starts 2016-01-04).
+  - **Gate-lag diagnostic** (the spec's own pre-registered check):
+    directly measured the binary `spy_trend_down` flag within each
+    crisis window. COVID: elevated on only 16/24 trading days in the
+    window — the SPY-200d-SMA trend gate took until 2020-02-27 (day 6 of
+    a 24-day, -33% crash) to flip, so the strategy held full-market
+    exposure through the crash's fastest, worst days. 2022 bear:
+    elevated on 153/196 days — the gate flipped by 2022-01-21 (day 13 of
+    a slower, ~9-month decline), so it caught most of that drawdown.
+    This directly explains both the diminished protection versus the
+    ungated version (which holds the defensive tilt unconditionally,
+    with no entry lag) and the difference in protection between the two
+    crises: a trend-following gate built on a 200-day SMA is structurally
+    too slow to catch a crash as fast as COVID's, but catches a slower
+    grind like 2022 reasonably well. Confirms the pre-registered
+    expectation in the Evaluation plan above rather than contradicting
+    it.
 
 ## Regime evidence
 
