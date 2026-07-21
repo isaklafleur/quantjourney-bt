@@ -240,6 +240,8 @@ it gives the package a quick install/import/report safety check before release.
   result links.
 - [Contributing](CONTRIBUTING.md) - how to add example strategies, fixes, and
   docs (fork, branch, pull request).
+- [Performance refactor in 0.12.4](docs/performance-0.12.4.md) - benchmark
+  results, implementation details, and parity checks for the faster engine paths.
 - [Release process](docs/release.md) - clean-tag publishing and exact artifact
   boundary checks.
 

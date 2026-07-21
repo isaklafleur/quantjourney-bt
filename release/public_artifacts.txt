@@ -106,6 +106,7 @@ sdist CHANGELOG.md
 sdist CONTRIBUTING.md
 sdist WINDOWS.md
 sdist compare/README.md
+sdist docs/performance-0.12.4.md
 sdist docs/public_scope.md
 sdist docs/release.md
 sdist docs/ROADMAP.md
