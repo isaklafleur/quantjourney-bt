@@ -17,6 +17,8 @@ trial contradicts it, note the contradiction instead.
 - **The lake API's recency defect isn't limited to `read_bars`'s `end` param — `read_features`'s `as_of` param has the identical shape**: any `as_of` outside roughly the last 2-3 weeks of wall-clock time returns zero rows (confirmed via bisection on `technical_features`, Low-volatility anomaly IMPLEMENT 2026-07-21). Work around it the same way for any research-tier feature read: always pass `as_of=datetime.now(UTC).date()`, since the real history comes back inside that one call regardless of the dates you actually need.
 - **`technical_features`' `knowledge_time` is bulk-clustered near "now"** (recent-backfill artifact), unlike `quality_features`' genuinely-spread-across-history `knowledge_time` — confirmed for `vol_60d` specifically (Low-volatility anomaly IMPLEMENT 2026-07-21). Pivot technical-feature columns directly on `event_time`, not knowledge_time-forward-filled, mirroring how `local_data._sctr_rank_panel` already treats `sctr_features`. Don't assume every research-tier dataset shares one `knowledge_time` behavior — check per-dataset, as `quality_features` already taught the opposite lesson.
 - **A mandatory-gate failure (IR vs. benchmark) doesn't automatically mean a risk-based/structural hypothesis is wrong — check regime evidence before defaulting to Archive.** Low-volatility anomaly failed the full-period IR gate more decisively than Quality composite (-0.41 vs -0.26) yet showed genuine, real downside protection in both available crisis windows (COVID +3.09pts, 2022 bear +11.74pts vs SPY) — the mechanism works as the risk-based hypothesis predicts, it's just net negative over a sample dominated by a long bull stretch between crises. This is a qualitatively different failure mode from Quality composite (which showed no compensating regime evidence at all, since its OOS run never reached crisis-analysis) and justifies **Improve** (regime-gate the exposure) rather than Archive. Read the regime evidence, not just the gate's pass/fail, before choosing a verdict.
+- **A crisis-only regime gate can't fix a full-period IR failure whose real source is drag during the calm majority of the sample, not crisis-window exposure — check what fraction of the period the gate is even active before expecting it to move the IR gate.** Regime-gated low-volatility anomaly (SPY-200d-SMA gate, elevated ~17% of days) left the mandatory IR gate numerically unchanged from the ungated version (-0.41 both) despite the structural change, because the gate only ever gets a chance to help during that ~17% — it has no mechanism at all to address the other ~83% of (calm, bull-dominated) days where the ungated version's underperformance actually accumulates. Don't expect a defensive-only gate to rescue a full-period benchmark-relative gate failure unless the failure itself is concentrated in the windows the gate covers. (`trial-registry.md`, Regime-gated low-volatility anomaly REVIEW 2026-07-21)
+- **A binary trend-following regime gate (SPY vs. its 200-day SMA) is measurably too slow for fast crashes, though it tracks slow grinds well — confirmed by direct measurement, not assumption.** In the same trial, the gate was elevated on only 16/24 trading days of the 24-day COVID crash (didn't flip until day 6) vs. 153/196 days of the ~9-month 2022 bear market (flipped by day 13) — and this lag directly explains why the regime-gated version's crisis protection (COVID +1.87pts, 2022 bear +7.27pts vs SPY) came in below the always-on ungated version's (+3.09pts/+11.74pts) in both windows. A 200-day SMA gate trades a genuine reduction in bull-market drag for a real loss of fast-crash coverage — worth pre-registering and measuring directly (via the underlying trend-flag Series against the crisis date range) for any future strategy using this same `sctr_momentum_regime_gated.py`-style gate, rather than assuming the gate is protective just because it's designed to be.
 
 ## Avoid list
 
@@ -31,6 +33,20 @@ spec they trace back to.
   Does not exclude other quality-signal combinations (e.g. Ready idea #4,
   ROIC + momentum) — only this specific two-factor/z-score/quarterly
   construction.
+- Regime-gated low-volatility anomaly: lowest-60d-vol quintile, gated on/off
+  by a binary SPY-vs-200d-SMA trend signal (full-market default exposure
+  when calm), monthly rebal, PIT S&P 500 — Archived 2026-07-21, failed the
+  mandatory IR-vs-benchmark gate identically to the ungated version
+  (IR -0.41 both) and eroded crisis-window protection (COVID +1.87pts vs.
+  ungated +3.09pts, 2022 bear +7.27pts vs. ungated +11.74pts) due to
+  gate lag on fast crashes. See `trial-registry.md` and
+  `docs/research/strategies/regime-gated-low-volatility-anomaly.md`. Does
+  not exclude a differently-constructed regime signal in principle, but
+  the underlying problem (gate only covers ~17% of days; the IR failure's
+  source is the other ~83%) applies to any crisis-only gate on this same
+  signal, so a faster/different trend signal isn't expected to clear the
+  gate either — treat a new attempt on this family as low-priority absent
+  a reason to believe otherwise.
 
 ## Regime evidence
 
@@ -58,3 +74,21 @@ Quality composite (REVIEW 2026-07-20) never reached crisis-analysis —
 its walk-forward/OOS run was blocked by the lake API infra defect noted
 above, and the mandatory IR gate had already failed decisively enough
 that REVIEW proceeded to Archive without waiting on it.
+
+**Regime-gated low-volatility anomaly** (REVIEW 2026-07-21, same method
+as the ungated trial): gating the low-vol quintile behind a binary
+SPY-200d-SMA trend signal (elevated on 449/2650 days, ~17%) *reduced*
+crisis-window protection versus the always-on ungated version rather
+than preserving it — COVID crash -31.53% vs SPY -33.40% (**+1.87pts**,
+vs. ungated's +3.09pts), 2022 bear -16.78% vs SPY -24.06% (**+7.27pts**,
+vs. ungated's +11.74pts). Direct measurement of the gate's own trend
+flag inside each window explains the gap: elevated on only 16/24 COVID
+days (flipped day 6 of a 24-day crash) vs. 153/196 2022-bear days
+(flipped day 13 of a ~9-month decline) — a 200-day SMA trend gate is
+too slow for a crash as fast as COVID's but adequate for a slow grind.
+Combined with the full-period IR gate staying numerically unchanged
+(-0.41, same as ungated), this shows the regime-gate mechanism didn't
+just underdeliver on speed — it can't reach the actual source of the
+full-period underperformance at all, since it only ever acts during the
+~17% of days it's active. Motivated Archive rather than another Improve
+iteration.

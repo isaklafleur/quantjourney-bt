@@ -1,7 +1,7 @@
 # Regime-gated low-volatility anomaly — research spec
 
-- **Status:** WIP (BACKTEST run 2026-07-21 — IR gate FAIL, cost-sweep
-  PASS, walk-forward BLOCKED; next is BACKTEST → REVIEW)
+- **Status:** Archived (REVIEW 2026-07-21 — IR gate FAIL, cost-sweep
+  PASS, walk-forward BLOCKED, verdict Archive)
 - **Family:** Technical / risk-based, regime-conditional
 - **Promoted from backlog:** 2026-07-21, rank 1
 - **Code:** `strategies/regime_gated_low_volatility_anomaly.py` written on
@@ -235,8 +235,55 @@ trading days (~17%) over the full window.
 
 ## Regime evidence
 
-_Filled in at REVIEW._
+Both crisis windows show real but *diminished* downside protection versus
+the ungated Low-volatility anomaly, and the gap is fully explained by
+the gate-lag diagnostic in the Results section above:
+
+- COVID crash (2020-02-19→2020-03-23): strategy -31.53% vs SPY -33.40%
+  (**+1.87pts**, vs. the ungated version's +3.09pts) — the SPY-200d-SMA
+  gate was elevated on only 16/24 trading days of the crash, missing its
+  fastest, worst days (didn't flip until day 6 of 24).
+- 2022 bear market (2022-01-03→2022-10-12): strategy -16.78% vs SPY
+  -24.06% (**+7.27pts**, vs. the ungated version's +11.74pts) — the gate
+  was elevated on 153/196 days, catching most of the slower decline
+  (flipped by day 13 of a ~9-month grind).
+- No GFC window in range (data starts 2016-01-04).
+
+Net: a trend-following regime gate built on a 200-day SMA is
+structurally too slow for fast crashes, adequate for slow ones — a
+speed/coverage trade-off, not a free improvement. This is a real,
+bisectable property of this gate construction, not an assumption.
 
 ## Verdict & lessons
 
-_Filled in at REVIEW._
+**Archive.** The regime gate does not clear the mandatory IR gate: IR is
+-0.41, numerically unchanged from the ungated version despite the
+structural change (different active-return/tracking-error components,
+same ratio). Worse, it *reduced* the crisis-window protection that was
+the entire motivation for trying this variant (COVID +1.87pts vs.
+ungated +3.09pts, 2022 bear +7.27pts vs. ungated +11.74pts) — the
+gate-lag diagnostic explains the mechanism (a 200-day SMA trend gate
+lags fast crashes).
+
+More important than the lag finding: the regime gate was only ever
+active on 449/2650 days (~17%) of the full period, so it structurally
+cannot address the source of the full-period IR failure, which comes
+from the other ~83% of (calm, bull-dominated) days where the low-vol
+tilt's opportunity cost accumulates — the same drag the ungated version
+showed. A defense-only-during-crises mechanism cannot rescue a
+full-period benchmark-relative gate failure whose cause isn't
+concentrated in crisis windows to begin with. A faster or differently-
+constructed regime signal (e.g. the realized-vol-level alternative the
+spec's Data & universe section flagged but didn't use) would likely
+trade crisis-timing precision for the same structural ceiling — improve
+the gate-lag diagnostic, not the full-period IR gate — so this is
+treated as Archive rather than spawning a third Improve iteration on
+this family. The underlying risk-based mechanism (low-vol names show
+genuine crisis defensiveness) remains real, per both trials' regime
+evidence; the specific "gate a low-vol tilt behind a trend signal"
+construction is what doesn't clear the bar. Branch
+`worktree-regime-gated-low-vol` left parked (not merged, not deleted —
+an unattended run doesn't delete branches). Lessons distilled into
+`knowledge.md` (crisis-only gates can't fix calm-period drag; the
+200d-SMA gate-lag measurement) plus an Avoid-list entry for this
+specific construction.

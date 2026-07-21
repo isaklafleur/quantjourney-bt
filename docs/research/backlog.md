@@ -12,19 +12,7 @@ no intraday, futures, forex, options, or order flow.
 
 ## WIP (max 1)
 
-**Regime-gated low-volatility anomaly** — promoted 2026-07-21 (Ready
-rank 1). Spec: `docs/research/strategies/regime-gated-low-volatility-anomaly.md`.
-Research branch/worktree `worktree-regime-gated-low-vol` created.
-`strategies/regime_gated_low_volatility_anomaly.py` written and
-smoke-tested. BACKTEST run 2026-07-21: mandatory IR-vs-benchmark gate
-**FAIL** (IR -0.41, active return -3.54%/yr vs SPY), cost-sweep **PASS**,
-walk-forward **BLOCKED** (same lake API recency defect as both prior
-trials). Regime evidence shows diminished-but-real crisis protection
-(COVID +1.87pts, 2022 bear +7.27pts vs SPY, both smaller than the
-ungated version's +3.09/+11.74pts) — the SPY-200d-SMA gate lags fast
-crashes (only active 16/24 COVID days) more than slow ones (153/196
-2022-bear days). Full detail in the spec's Results section. Stage: next
-is BACKTEST → REVIEW.
+_Empty._
 
 ## Ready (ranked)
 
@@ -47,6 +35,15 @@ averaged, top-quartile long, quarterly rebal — tried as "Quality composite",
 Archived 2026-07-20 (failed the mandatory IR-vs-benchmark gate, IR -0.26).
 See `knowledge.md`'s Avoid list. A differently-combined quality signal (e.g.
 idea #4 below) is not excluded by this.
+
+Explicitly avoided: lowest-60d-vol quintile gated on/off by a binary
+SPY-vs-200d-SMA trend signal — tried as "Regime-gated low-volatility
+anomaly", Archived 2026-07-21 (IR -0.41, unchanged from the ungated
+version; gate only active ~17% of days, can't address the calm-period
+drag that causes the full-period IR failure). See `knowledge.md`'s Avoid
+list. Low priority for any future attempt on this family (faster/
+different regime signal) absent a reason to believe the structural
+ceiling doesn't apply.
 
 ## Blocked
 
