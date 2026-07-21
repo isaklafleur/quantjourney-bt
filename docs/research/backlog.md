@@ -14,7 +14,8 @@ no intraday, futures, forex, options, or order flow.
 
 Post-earnings-announcement drift (PEAD) — promoted 2026-07-21 from Ready
 rank 1. Spec: `docs/research/strategies/post-earnings-announcement-drift.md`.
-Research branch/worktree: `worktree-pead`. Next stage: SPEC → IMPLEMENT.
+Research branch/worktree: `worktree-pead` (`strategies/post_earnings_announcement_drift.py`
+committed at `a6add37`). Next stage: IMPLEMENT → BACKTEST.
 
 ## Ready (ranked)
 

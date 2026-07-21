@@ -1,6 +1,6 @@
 # Post-earnings-announcement drift (PEAD) — research spec
 
-- **Status:** WIP
+- **Status:** WIP (code written, next stage BACKTEST)
 - **Family:** Fundamental, event-driven
 - **Promoted from backlog:** 2026-07-21, rank 1
 
@@ -125,6 +125,62 @@ Written before the BACKTEST stage runs.
   crisis-regime prediction as the low-volatility anomaly's risk-based
   one, so this is exploratory rather than a check against a stated
   hypothesis.
+
+## Code
+
+`strategies/post_earnings_announcement_drift.py`, committed on
+`worktree-pead` (`a6add37`). Live-probed `earnings_surprise` before
+writing any code (see below) rather than trusting the backlog's assumed
+schema.
+
+Schema confirmed: columns are `ticker`, `event_time` (fiscal period end),
+`cik`, `knowledge_time`, `net_income`, `net_income_prev_year`, `yoy_diff`,
+`sue`, `source`, `dataset`. `sue` is present as assumed. `knowledge_time`
+lags `event_time` by ~26-38 days (mean 32) and is genuinely spread across
+history (2008-2026 for large caps) — behaves like `quality_features`, not
+`technical_features` — so PIT handling uses the same
+`knowledge_time`-anchored `merge_asof` forward-fill `quality_composite.py`
+established, extended with a companion days-since-event panel so entries
+gate to "shortly after" an announcement (`ENTRY_WINDOW_DAYS=5` trading
+days) rather than any day a stale SUE value is still on file.
+
+Confirmed the fiscal Q4/annual gap flagged in the backlog/spec: both AAPL
+(fiscal Q4 = Sept quarter) and MSFT (fiscal Q4 = June quarter) are
+consistently missing that one quarter's row every year starting around
+fiscal 2021 — dataset-wide, not ticker-specific. Handling choice made:
+no special-casing, that quarter simply produces no signal for the
+affected name that year (spec's simpler option; no fabricated
+staleness-capped carry-forward).
+
+Confirmed entry-pool density against the real 2023 PIT S&P 500 universe
+(514 names): weekly announcement counts are highly seasonal (median
+7/week) but 100+ names report in each of the four one-week earnings-season
+peaks/year (max observed 171) — set `MIN_ELIGIBLE_FOR_QUINTILE=10` low
+enough to activate during those peaks while naturally sitting idle most
+other weeks (expected for an event-driven strategy, not a bug).
+
+Design choices made (mode/cutoff/window were left open by the spec):
+weight mode with an event-driven eligibility mask, modeled directly on
+`sctr_momentum_regime_gated.py`'s day-by-day incumbent-priority
+`_build_regime_gated_weights` pattern (see `_build_pead_weights`) but with
+purely time-based exit (fixed `HOLDING_DAYS=60` trading days) instead of
+threshold-based hold/exit — the defining PEAD mechanic per Bernard &
+Thomas 1989. Top quintile (`SUE_TOP_QUANTILE=0.80`), not decile, chosen
+for a more diversified long book given the small daily entry-pool sizes.
+Daily rebalance (`RebalancePolicy(frequency="D")`), unlike the
+calendar-rebalanced trials so far, since entries can occur on any trading
+day. Ran the `qj-strategy-reviewer` checklist against the file (timing,
+data handling, weights/exposure, costs, mode fit) — no issues found; the
+equal-weight cap formula (`min(1/len(held), max_position_size)`) is the
+same one already used in `low_volatility_anomaly.py`/`quality_composite.py`
+and keeps weight sums ≤ 1 by construction.
+
+Smoke-tested end-to-end (`strategies/_smoke_pead.py`, committed alongside):
+15 tickers, 2024-01-02→2026-07-20, 638 dates/rebalances, 60 days with a
+non-zero position, max row-sum 0.30 (≤ cap), all-finite weights and SUE
+signal. Full `pytest tests/ -q` green after (169 passed) — no manifest
+fix needed this time since the spec file was already added to
+`release/public_artifacts.txt` at PROMOTE.
 
 ## Results
 
