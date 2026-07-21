@@ -15,9 +15,10 @@ Public API::
     result = engine.run(portfolio_data=pd_data)
     print(result.summary())
 
-Supports rolling, expanding, anchored, and purged/embargoed fold schemes,
+Supports rolling, expanding, anchored, and pre-OOS-purged fold schemes,
 grid-search and Optuna parameter optimization, and overfitting diagnostics
-(deflated Sharpe ratio, PBO). See strategies/example_wf_*.py for usage.
+(deflated Sharpe ratio, rolling top-K rank stability). Canonical CSCV PBO
+is not computed by this rolling engine. See strategies/example_wf_*.py.
 
 Copyright (c) 2026 QuantJourney.
 Licensed under the Apache License 2.0.

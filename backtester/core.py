@@ -51,6 +51,7 @@ from backtester.version import __version__ as BACKTESTER_VERSION
 if TYPE_CHECKING:
     from backtester.portfolio.instr_data import InstrumentData
     from backtester.portfolio.portf_data import PortfolioData
+    from backtester.portfolio.weight_cost import WeightCostBreakdown
     from backtester.universe import Universe
 
 # ---------------------------------------------------------------------------
@@ -296,27 +297,29 @@ class Backtester(SDKClientMixin, ReportingMixin):
         # ── Execution mode ──
         execution_mode: str = "weights",  # "weights" (default) or "orders"
         weight_execution: str = "fast",  # weights only: "fast" or "orders"
-        slippage_model=None,  # SlippageModel instance
-        commission_scheme=None,  # CommissionScheme instance
-        weight_cost_model=None,  # WeightCostModel instance for weight-mode implied trades
+        slippage_model: Any = None,  # SlippageModel instance
+        commission_scheme: Any = None,  # CommissionScheme instance
+        weight_cost_model: Any = None,  # WeightCostModel instance for weight-mode implied trades
         contract_specs: dict[str, ContractSpec] | None = None,
         fill_at: str | None = None,  # defaults to open; policy timing for weight-orders
         max_volume_participation: float | None = None,  # order-mode volume cap
+        volume_lookback: int = 20,  # lagged ADV window for opening fills
+        expected_open_volume_fraction: float = 1.0,  # forecast share available at open
         # ── Rebalancing ──
-        rebalance_policy=None,  # RebalancePolicy instance (default: daily)
+        rebalance_policy: Any = None,  # RebalancePolicy instance (default: daily)
         # ── Benchmark returns (for tracking-error rebalance trigger) ──
         benchmark_returns: pd.Series | None = None,
         # ── Risk model ──
-        risk_model=None,  # RiskModel instance (applied between weights and rebalance)
-        pre_trade_risk=None,  # PreTradeRisk for concrete orders (opt-in limits)
+        risk_model: Any = None,  # RiskModel instance (applied between weights and rebalance)
+        pre_trade_risk: Any = None,  # PreTradeRisk for concrete orders (opt-in limits)
         # ── Performance flags ──
         skip_analysis: bool = False,  # skip StrategyPerformanceAnalysis (saves ~800ms)
         lite_init: bool = False,  # skip throwaway validation/metrics in data init (saves ~600ms)
         strict_reporting: bool | None = None,
         strict_data_fetch: bool | None = None,
         allow_partial_data: bool = False,
-        **kwargs,
-    ):
+        **kwargs: Any,
+    ) -> None:
         # ── Reject unknown kwargs — silent swallowing hides typos like
         # `rebalance_polcy=` and runs a materially different backtest. ──
         if kwargs:
@@ -499,6 +502,8 @@ class Backtester(SDKClientMixin, ReportingMixin):
                 commission=commission_scheme,
                 fill_at=fill_at,
                 max_volume_participation=max_volume_participation,
+                volume_lookback=volume_lookback,
+                expected_open_volume_fraction=expected_open_volume_fraction,
                 notional_fn=lambda instrument, price, quantity: self._trade_notional(
                     instrument, quantity, price
                 ),
@@ -568,6 +573,10 @@ class Backtester(SDKClientMixin, ReportingMixin):
                 ignored_knobs.append("fill_at")
             if max_volume_participation is not None:
                 ignored_knobs.append("max_volume_participation")
+            if volume_lookback != 20:
+                ignored_knobs.append("volume_lookback")
+            if expected_open_volume_fraction != 1.0:
+                ignored_knobs.append("expected_open_volume_fraction")
             if not getattr(self.pre_trade_risk, "is_passthrough", False):
                 ignored_knobs.append("pre_trade_risk")
         elif self.execution_mode == "weights":
@@ -1858,7 +1867,7 @@ class Backtester(SDKClientMixin, ReportingMixin):
         self._rebalance_stats = dict(planner.stats)
 
         self.portfolio_data.total_transaction_costs = self._fill_cost_history(result.nav.index)
-        self._weight_cost_breakdown = None
+        self._weight_cost_breakdown: WeightCostBreakdown | None = None
 
         if self.fill_engine.order_history:
             if self.blotter is None:
@@ -1869,7 +1878,10 @@ class Backtester(SDKClientMixin, ReportingMixin):
 
     def _contract_spec(self, instrument: str) -> ContractSpec:
         key = str(instrument).upper()
-        spec = self.contract_specs.get(key, get_contract_spec(key))
+        spec = self.contract_specs.get(key)
+        if spec is None:
+            spec = get_contract_spec(key)
+            self.contract_specs[key] = spec
         spec.validate_settlement_currency(self.base_currency)
         return spec
 
@@ -2282,9 +2294,17 @@ class Backtester(SDKClientMixin, ReportingMixin):
         except Exception as e:
             self._timings["data_fetch_seconds"] = time.perf_counter() - stage_started
             self._timings["total_seconds"] = time.perf_counter() - total_started
-            logger.error(
-                f"[Backtester] Could not fetch market data — skipping strategy.\n  Error: {e}"
+            from backtester.sdk.client import PrepareValidationError
+
+            friendly_prepare_error = (
+                isinstance(e, PrepareValidationError)
+                and _env_flag("QJ_FRIENDLY_ERRORS", False)
+                and os.getenv("QJ_LOG_LEVEL", "").strip().upper() != "DEBUG"
             )
+            if not friendly_prepare_error:
+                logger.error(
+                    f"[Backtester] Could not fetch market data — skipping strategy.\n  Error: {e}"
+                )
             if self._strict_data_fetch:
                 raise
             return

@@ -29,7 +29,7 @@ from backtester.utils.logger import logger
 from backtester.walkforward.folds.base import Fold
 from backtester.walkforward.result import FoldResult
 from backtester.walkforward.statistics.overfit import efficiency, overfit_ratio
-from backtester.walkforward.statistics.pbo import selected_trial_logit
+from backtester.walkforward.statistics.pbo import selected_trial_rank_logit
 
 
 class FoldRunner:
@@ -59,6 +59,7 @@ class FoldRunner:
         backtester_factory: Callable[..., Any] | None = None,
         optimizer: Any = None,
         base_config: dict[str, Any] | None = None,
+        rank_stability_trials: int | None = None,
         pbo_trials: int = 0,
     ) -> None:
         self._fold = fold
@@ -69,7 +70,9 @@ class FoldRunner:
         self._backtester_factory = backtester_factory
         self._optimizer = optimizer
         self._base_config = dict(base_config or {})
-        self._pbo_trials = pbo_trials
+        self._rank_stability_trials = (
+            rank_stability_trials if rank_stability_trials is not None else pbo_trials
+        )
 
     def run(self) -> FoldResult:
         """Execute fold and return FoldResult (fold_status='failed' on refit crash)."""
@@ -107,8 +110,8 @@ class FoldRunner:
         optimizer_n_evals = opt_meta.get("optimizer_n_evals")
         optimizer_best_objective = opt_meta.get("optimizer_best_objective")
         optimizer_trial_values = opt_meta.get("optimizer_trial_values")
-        pbo_candidate_oos = opt_meta.get("pbo_candidate_oos")
-        pbo_selected_logit = opt_meta.get("pbo_selected_logit")
+        rank_stability_candidate_oos = opt_meta.get("rank_stability_candidate_oos")
+        rank_stability_selected_logit = opt_meta.get("rank_stability_selected_logit")
 
         is_metrics = self._compute_metrics_for_window(
             self._fold.train_start,
@@ -206,8 +209,8 @@ class FoldRunner:
             optimizer_n_evals=optimizer_n_evals,
             optimizer_best_objective=optimizer_best_objective,
             optimizer_trial_values=optimizer_trial_values,
-            pbo_candidate_oos=pbo_candidate_oos,
-            pbo_selected_logit=pbo_selected_logit,
+            rank_stability_candidate_oos=rank_stability_candidate_oos,
+            rank_stability_selected_logit=rank_stability_selected_logit,
         )
 
     # ── Private helpers ───────────────────────────────────────────────
@@ -448,11 +451,11 @@ class FoldRunner:
             best_params = dict(getattr(opt_result, "best_params", {}) or {})
             opt_meta = self._optimizer_meta(opt_result, best_params)
 
-            # Opt-in PBO: evaluate the optimizer's top-K trials OOS
-            if self._pbo_trials >= 2:
-                candidate_oos, lam = self._evaluate_pbo_candidates(opt_result)
-                opt_meta["pbo_candidate_oos"] = candidate_oos
-                opt_meta["pbo_selected_logit"] = lam
+            # Opt-in rolling rank stability: evaluate top-K IS trials OOS.
+            if self._rank_stability_trials >= 2:
+                candidate_oos, lam = self._evaluate_rank_stability_candidates(opt_result)
+                opt_meta["rank_stability_candidate_oos"] = candidate_oos
+                opt_meta["rank_stability_selected_logit"] = lam
 
         bt = self._build_fold_backtester(best_params)
         self._run_backtester(bt)
@@ -460,6 +463,7 @@ class FoldRunner:
         pdata = getattr(bt, "portfolio_data", None)
         if pdata is None:
             raise ValueError("backtester_factory result must expose portfolio_data after run")
+        self._validate_fold_portfolio_bounds(pdata)
         return pdata, opt_meta
 
     async def _run_fold_refit_async(self) -> tuple[Any, dict[str, Any]]:
@@ -480,10 +484,12 @@ class FoldRunner:
             best_params = dict(getattr(opt_result, "best_params", {}) or {})
             opt_meta = self._optimizer_meta(opt_result, best_params)
 
-            if self._pbo_trials >= 2:
-                candidate_oos, lam = await self._evaluate_pbo_candidates_async(opt_result)
-                opt_meta["pbo_candidate_oos"] = candidate_oos
-                opt_meta["pbo_selected_logit"] = lam
+            if self._rank_stability_trials >= 2:
+                candidate_oos, lam = await self._evaluate_rank_stability_candidates_async(
+                    opt_result
+                )
+                opt_meta["rank_stability_candidate_oos"] = candidate_oos
+                opt_meta["rank_stability_selected_logit"] = lam
 
         bt = self._build_fold_backtester(best_params)
         await self._run_backtester_async(bt)
@@ -491,6 +497,7 @@ class FoldRunner:
         pdata = getattr(bt, "portfolio_data", None)
         if pdata is None:
             raise ValueError("backtester_factory result must expose portfolio_data after run")
+        self._validate_fold_portfolio_bounds(pdata)
         return pdata, opt_meta
 
     @staticmethod
@@ -525,16 +532,16 @@ class FoldRunner:
                 return [float(v) for v in arr]
         return None
 
-    # ── PBO top-K OOS evaluation (opt-in) ─────────────────────────────
+    # ── Rolling top-K OOS rank-stability evaluation (opt-in) ─────────
 
-    def _pbo_top_trials(self, opt_result: Any) -> list[Any]:
+    def _rank_stability_top_trials(self, opt_result: Any) -> list[Any]:
         top_k = getattr(opt_result, "top_k", None)
         if top_k is None:
             return []
-        top = top_k(self._pbo_trials)
+        top = top_k(self._rank_stability_trials)
         return top if len(top) >= 2 else []
 
-    def _pbo_logit_from_scores(self, oos_scores: list[float]) -> float | None:
+    def _rank_stability_logit_from_scores(self, oos_scores: list[float]) -> float | None:
         """λ of the IS-selected trial (top_k[0]) among candidate OOS scores."""
         if not oos_scores:
             return None
@@ -547,19 +554,19 @@ class FoldRunner:
             if not finite_scores:
                 message = (
                     f"[WalkForward] Fold {self._fold.fold_id}: ALL "
-                    f"{len(oos_scores)} PBO candidate backtests failed — "
+                    f"{len(oos_scores)} rank-stability candidate backtests failed — "
                     "selection rank meaningless; logit set to NaN"
                 )
             else:
                 message = (
                     f"[WalkForward] Fold {self._fold.fold_id}: only "
-                    f"{len(finite_scores)}/{len(oos_scores)} PBO candidate "
+                    f"{len(finite_scores)}/{len(oos_scores)} rank-stability candidate "
                     "backtests produced finite OOS scores — selection rank "
                     "not computable; logit set to NaN"
                 )
             logger.warning(message)
             return float("nan")
-        return selected_trial_logit(float(selected), finite_scores)
+        return selected_trial_rank_logit(float(selected), finite_scores)
 
     def _oos_score_for_params(self, pdata: Any) -> float:
         """OOS Sharpe of a candidate backtest (higher = better rank)."""
@@ -568,14 +575,16 @@ class FoldRunner:
         )
         return float(metrics["sharpe"])
 
-    def _evaluate_pbo_candidates(self, opt_result: Any) -> tuple[list[float] | None, float | None]:
+    def _evaluate_rank_stability_candidates(
+        self, opt_result: Any
+    ) -> tuple[list[float] | None, float | None]:
         """
         Re-backtest the optimizer's top-K IS trials over the fold window
         and score each on the OOS slice (by OOS Sharpe; the ranking
         assumes higher-is-better regardless of the IS objective
         direction).  Failed candidates score -inf (worst rank).
         """
-        top = self._pbo_top_trials(opt_result)
+        top = self._rank_stability_top_trials(opt_result)
         if not top:
             return None, None
 
@@ -587,16 +596,17 @@ class FoldRunner:
                 pdata = getattr(bt, "portfolio_data", None)
                 if pdata is None:
                     raise ValueError("candidate backtester exposes no portfolio_data")
+                self._validate_fold_portfolio_bounds(pdata)
                 oos_scores.append(self._oos_score_for_params(pdata))
             except Exception:
                 oos_scores.append(float("-inf"))
-        return oos_scores, self._pbo_logit_from_scores(oos_scores)
+        return oos_scores, self._rank_stability_logit_from_scores(oos_scores)
 
-    async def _evaluate_pbo_candidates_async(
+    async def _evaluate_rank_stability_candidates_async(
         self, opt_result: Any
     ) -> tuple[list[float] | None, float | None]:
-        """Async twin of ``_evaluate_pbo_candidates``."""
-        top = self._pbo_top_trials(opt_result)
+        """Async twin of ``_evaluate_rank_stability_candidates``."""
+        top = self._rank_stability_top_trials(opt_result)
         if not top:
             return None, None
 
@@ -608,10 +618,11 @@ class FoldRunner:
                 pdata = getattr(bt, "portfolio_data", None)
                 if pdata is None:
                     raise ValueError("candidate backtester exposes no portfolio_data")
+                self._validate_fold_portfolio_bounds(pdata)
                 oos_scores.append(self._oos_score_for_params(pdata))
             except Exception:
                 oos_scores.append(float("-inf"))
-        return oos_scores, self._pbo_logit_from_scores(oos_scores)
+        return oos_scores, self._rank_stability_logit_from_scores(oos_scores)
 
     def _build_fold_backtester(self, best_params: dict[str, Any]) -> Any:
         """
@@ -647,6 +658,42 @@ class FoldRunner:
             )
         except TypeError:
             return self._backtester_factory(**config)
+
+    def _validate_fold_portfolio_bounds(self, portfolio_data: Any) -> None:
+        """Fail closed when a custom factory ignores the requested fold dates."""
+        nav = getattr(portfolio_data, "net_asset_value", None)
+        if nav is None or not hasattr(nav, "index") or len(nav.index) == 0:
+            raise ValueError(
+                "per-fold refit produced no dated net_asset_value; fold bounds cannot be audited"
+            )
+
+        index = pd.DatetimeIndex(nav.index)
+        if index.hasnans:
+            raise ValueError(
+                "per-fold refit produced NaT timestamps; fold bounds cannot be audited"
+            )
+        if index.tz is not None:
+            index = index.tz_convert("UTC").tz_localize(None)
+        actual_start = pd.Timestamp(index.min()).normalize()
+        actual_end = pd.Timestamp(index.max()).normalize()
+
+        requested_start = pd.Timestamp(self._fold.train_start)
+        requested_end = pd.Timestamp(self._fold.oos_end)
+        if requested_start.tzinfo is not None:
+            requested_start = requested_start.tz_convert("UTC").tz_localize(None)
+        if requested_end.tzinfo is not None:
+            requested_end = requested_end.tz_convert("UTC").tz_localize(None)
+        requested_start = requested_start.normalize()
+        requested_end = requested_end.normalize()
+
+        if actual_start < requested_start or actual_end > requested_end:
+            raise ValueError(
+                "per-fold refit escaped requested date bounds: "
+                f"requested [{requested_start.date()}, {requested_end.date()}], "
+                f"produced [{actual_start.date()}, {actual_end.date()}]. "
+                "Propagate the factory train_start/oos_end strings into "
+                "backtest_period."
+            )
 
     def _run_backtester(self, bt: Any) -> None:
         runner = getattr(bt, "run_strategy", None) or getattr(bt, "run", None)

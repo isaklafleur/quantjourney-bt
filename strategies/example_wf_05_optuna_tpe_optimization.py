@@ -140,7 +140,7 @@ def main() -> None:
         test_months=6,
         step_months=6,
         purge_days=5,
-        embargo_pct=0.01,
+        extra_pre_oos_purge_pct=0.01,
     )
     wf = WalkForwardEngine(config=config, initial_capital=100_000).run(best.portfolio_data)
     print("\nWalk-forward validation of the Optuna-best params:")

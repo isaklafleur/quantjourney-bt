@@ -1,5 +1,5 @@
 """
-Fold schemes subpackage — polymorphic fold generation with purge & embargo.
+Fold schemes subpackage — polymorphic generation with pre-OOS purging.
 
 Usage::
 
@@ -16,7 +16,7 @@ from backtester.walkforward.config import WalkForwardConfig
 from backtester.walkforward.folds.anchored import AnchoredFoldScheme
 from backtester.walkforward.folds.base import Fold, FoldScheme
 from backtester.walkforward.folds.expanding import ExpandingFoldScheme
-from backtester.walkforward.folds.purge import compute_purge_embargo
+from backtester.walkforward.folds.purge import compute_pre_oos_purge, compute_purge_embargo
 from backtester.walkforward.folds.rolling import RollingFoldScheme
 
 __all__ = [
@@ -25,6 +25,7 @@ __all__ = [
     "RollingFoldScheme",
     "ExpandingFoldScheme",
     "AnchoredFoldScheme",
+    "compute_pre_oos_purge",
     "compute_purge_embargo",
     "fold_scheme_factory",
 ]

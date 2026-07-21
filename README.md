@@ -3,7 +3,7 @@
 A Python-native backtesting engine for reproducible portfolio research.
 
 [![Python](https://img.shields.io/badge/Python-%3E%3D3.11-3776AB?logo=python&logoColor=white)](https://python.org)
-[![PyPI](https://img.shields.io/pypi/v/quantjourney-bt?color=orange)](https://pypi.org/project/quantjourney-bt/)
+[![PyPI](https://img.shields.io/pypi/v/quantjourney-bt?color=orange&cacheSeconds=300&v=0.12.4)](https://pypi.org/project/quantjourney-bt/0.12.4/)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/Platform-macOS%20%7C%20Linux%20%7C%20Windows-lightgrey)]()
 [![API](https://img.shields.io/badge/API-QuantJourney%20Cloud-1B4F72)](https://quantjourney.cloud)
@@ -24,7 +24,7 @@ one repeatable run.
 pip install quantjourney-bt
 ```
 
-The public package supports Python 3.11 and newer.
+Current PyPI release: **0.12.4**. The public package supports Python 3.11 and newer.
 
 ## Why It Exists
 
@@ -50,6 +50,14 @@ and scheduled rebalancing.
 **Order mode** is for execution-aware research: market, limit, stop, stop-limit,
 trailing stop, bracket, and OCO orders with commissions, slippage, volume
 participation, fills, positions, cash, NAV, and trade blotters.
+
+Fast weight execution solves transaction costs recursively on one post-cost
+capital path: NAV, implied quantities, trade notionals, booked costs and
+reported positions reconcile to the same self-financing ledger. Use
+`weight_execution="orders"` when discrete fills and cash movements matter.
+For fills at the open, range-sensitive slippage sees only the previous
+completed bar and volume capacity is forecast from lagged observations; the
+engine does not use that day's later high, low, close or full-day volume.
 
 ## Engine Contract
 
@@ -133,7 +141,8 @@ pip install quantjourney-bt
 ```
 
 The wheel installs the `backtester` library. The runnable strategy catalog and
-`strategy.sh` launcher are repository assets; clone this repository when you
+the `strategy.sh` (macOS/Linux) and `strategy.bat` (Windows) launchers are
+repository assets; clone this repository when you
 want to run or modify the examples below.
 
 The install also exposes `qj-bt data`, an unauthenticated terminal helper for
@@ -204,7 +213,9 @@ availability catalog.
 ```text
 backtester/               Runtime package imported as backtester
 strategies/               Runnable strategy examples
-strategy.sh               Strategy launcher and report runner
+strategy.sh               macOS/Linux strategy launcher
+strategy.bat              Windows strategy launcher
+strategy.py               Shared cross-platform launcher logic
 benchmarks/               Benchmark-suite notes
 skills/                   Strategy-authoring skill materials
 tests/                    Import, packaging, and report smoke checks
@@ -222,12 +233,15 @@ it gives the package a quick install/import/report safety check before release.
 
 ## Documentation
 
+- [Windows setup](WINDOWS.md) - native Windows installation and `strategy.bat` usage without WSL.
 - [Roadmap](docs/ROADMAP.md) - direction of travel by theme, without delivery
   dates or ordering commitments.
 - [Strategy catalog](strategies/README.md) - runnable examples with source and
   result links.
 - [Contributing](CONTRIBUTING.md) - how to add example strategies, fixes, and
   docs (fork, branch, pull request).
+- [Performance refactor in 0.12.4](docs/performance-0.12.4.md) - benchmark
+  results, implementation details, and parity checks for the faster engine paths.
 - [Release process](docs/release.md) - clean-tag publishing and exact artifact
   boundary checks.
 
@@ -262,6 +276,10 @@ List available strategies:
 ./strategy.sh --list
 ```
 
+On Windows use `strategy.bat --list` in Command Prompt or
+`.\strategy.bat --list` in PowerShell. See [WINDOWS.md](WINDOWS.md) for the
+complete native Windows workflow.
+
 Check one strategy import without credentials or a data call:
 
 ```bash
@@ -286,6 +304,12 @@ Run a real backtest after setting credentials:
 export QJ_API_KEY="..."
 ./strategy.sh example_weights_01_sma_daily --output /tmp/qj-reports
 ```
+
+If market-data preparation rejects the strategy configuration, the launcher
+stops before execution and shows a yellow `Configuration needs attention`
+panel with the affected field and a suggested fix. Normal runs omit the raw
+response and traceback; set `QJ_LOG_LEVEL=DEBUG` when technical request details
+are needed.
 
 Run all strategies sequentially through the same launcher:
 
@@ -379,9 +403,9 @@ accounting is rejected rather than approximated.
 
 | # | Example | Idea | Code | Results |
 |:--|:--|:--|:--|:--|
-| WF01 | Rolling Walk-Forward | Sliding fixed-length train/test windows with purge/embargo | [source](strategies/example_wf_01_rolling_walkforward.py) | [view](https://backtester.quantjourney.cloud/strategies/example-wf-01-rolling-walkforward) |
+| WF01 | Rolling Walk-Forward | Sliding fixed-length train/test windows with a pre-OOS purge | [source](strategies/example_wf_01_rolling_walkforward.py) | [view](https://backtester.quantjourney.cloud/strategies/example-wf-01-rolling-walkforward) |
 | WF02 | Expanding Walk-Forward | Ever-growing training window vs sliding test window | [source](strategies/example_wf_02_expanding_walkforward.py) | [view](https://backtester.quantjourney.cloud/strategies/example-wf-02-expanding-walkforward) |
-| WF03 | Anchored + Purge/Embargo | How purge and embargo gaps prevent train/test leakage | [source](strategies/example_wf_03_anchored_purge_embargo.py) | [view](https://backtester.quantjourney.cloud/strategies/example-wf-03-anchored-purge-embargo) |
+| WF03 | Anchored + Pre-OOS Purging | Fixed and percentage-based exclusions before each test window | [source](strategies/example_wf_03_anchored_purge_embargo.py) | [view](https://backtester.quantjourney.cloud/strategies/example-wf-03-anchored-purge-embargo) |
 | WF04 | Grid Search | Exhaustive SMA fast/slow tuning scored by real backtests | [source](strategies/example_wf_04_grid_search_optimization.py) | [view](https://backtester.quantjourney.cloud/strategies/example-wf-04-grid-search-optimization) |
 | WF05 | Optuna TPE + Walk-Forward | Bayesian parameter search, then out-of-sample validation | [source](strategies/example_wf_05_optuna_tpe_optimization.py) | [view](https://backtester.quantjourney.cloud/strategies/example-wf-05-optuna-tpe-optimization) |
 
@@ -395,7 +419,16 @@ QJ_WF_MODE=per_fold_refit ./strategy.sh example_wf_01_rolling_walkforward
 
 The logs and walk-forward summary report the active mode. Per-fold refit is
 slower because each fold runs the strategy again through the data/preparation
-pipeline. WF04-WF05 are optimization workflows and should be read as selection
+pipeline. Factories receive ISO date strings, and the runner fails closed if
+the returned NAV escapes the requested fold bounds. Learned preprocessing must
+still be fitted on training data only.
+
+`extra_pre_oos_purge_pct` extends the exclusion immediately before OOS; the
+legacy `embargo_pct` alias does not implement classical post-test embargo.
+Optimizer runs report DSR with raw/effective trial counts plus a rolling top-K
+rank-failure diagnostic. The latter is not canonical CSCV PBO.
+
+WF04-WF05 are optimization workflows and should be read as selection
 diagnostics rather than a simple winner-takes-all backtest.
 
 Long/short examples (W13–W16) are market-neutral; short borrow/financing is not

@@ -74,13 +74,23 @@ class FoldResult:
     # population used for DSR's E[max SR] deflation.
     optimizer_trial_values: list[float] | None = None
 
-    # PBO (opt-in via WalkForwardConfig.pbo_trials): top-K trials'
-    # OOS objective values and the selected trial's rank logit λ.
-    pbo_candidate_oos: list[float] | None = None
-    pbo_selected_logit: float | None = None
+    # Rolling top-K rank stability (not canonical CSCV PBO): trials'
+    # OOS objective values and the IS-selected trial's OOS rank logit.
+    rank_stability_candidate_oos: list[float] | None = None
+    rank_stability_selected_logit: float | None = None
 
     # Cost sensitivity (optional)
     cost_sensitivity: dict[int, dict[str, float]] | None = None
+
+    @property
+    def pbo_candidate_oos(self) -> list[float] | None:
+        """Deprecated compatibility alias for rank-stability candidates."""
+        return self.rank_stability_candidate_oos
+
+    @property
+    def pbo_selected_logit(self) -> float | None:
+        """Deprecated compatibility alias for the rank-stability logit."""
+        return self.rank_stability_selected_logit
 
 
 # ── Aggregate Result ──────────────────────────────────────────────────
@@ -111,9 +121,15 @@ class WalkForwardResult:
     sharpe_decay: float = 0.0
     deflated_sharpe: float | None = None  # probability in [0, 1]
     deflated_sharpe_reason: str | None = None  # why DSR is unavailable (when None)
-    pbo: float | None = None
-    pbo_available: bool = False
-    pbo_reason: str | None = None  # why PBO is unavailable (when None)
+    # ``pooled_walk_forward_dsr_style`` is an explicitly labelled extension:
+    # its trial objectives come from multiple chronological training folds,
+    # not one canonical common trial population. With N=1 the statistic is PSR.
+    deflated_sharpe_method: str | None = None
+    dsr_raw_completed_trials: int | None = None
+    dsr_effective_trials: float | None = None
+    walk_forward_top_k_rank_failure_rate: float | None = None
+    rank_stability_available: bool = False
+    rank_stability_reason: str | None = None
 
     # ── Parameter stability ──
     param_stability: dict[str, float] | None = None
@@ -133,6 +149,21 @@ class WalkForwardResult:
     @property
     def n_folds(self) -> int:
         return len(self.folds)
+
+    @property
+    def pbo(self) -> float | None:
+        """Deprecated 0.12.x alias; this value is not canonical CSCV PBO."""
+        return self.walk_forward_top_k_rank_failure_rate
+
+    @property
+    def pbo_available(self) -> bool:
+        """Deprecated compatibility alias for ``rank_stability_available``."""
+        return self.rank_stability_available
+
+    @property
+    def pbo_reason(self) -> str | None:
+        """Deprecated compatibility alias for ``rank_stability_reason``."""
+        return self.rank_stability_reason
 
     @property
     def fold_boundaries(self) -> pd.DataFrame:
@@ -168,6 +199,13 @@ class WalkForwardResult:
             "sharpe_decay": self.sharpe_decay,
             "deflated_sharpe": self.deflated_sharpe,
             "deflated_sharpe_reason": self.deflated_sharpe_reason,
+            "deflated_sharpe_method": self.deflated_sharpe_method,
+            "dsr_raw_completed_trials": self.dsr_raw_completed_trials,
+            "dsr_effective_trials": self.dsr_effective_trials,
+            "walk_forward_top_k_rank_failure_rate": (self.walk_forward_top_k_rank_failure_rate),
+            "rank_stability_available": self.rank_stability_available,
+            "rank_stability_reason": self.rank_stability_reason,
+            # Deprecated compatibility keys for 0.12.x.
             "pbo": self.pbo,
             "pbo_available": self.pbo_available,
             "pbo_reason": self.pbo_reason,
@@ -283,13 +321,31 @@ class WalkForwardResult:
         lines.append(f"  Sharpe Decay:         {self.sharpe_decay:+.3f}/fold")
 
         if self.deflated_sharpe is not None:
-            lines.append(f"  Deflated Sharpe (prob):{self.deflated_sharpe:>7.2f}")
+            if self.deflated_sharpe_method == "pooled_walk_forward_dsr_style":
+                dsr_label = "Pooled WF DSR-style"
+            elif self.deflated_sharpe_method == "probabilistic_sharpe_n1":
+                dsr_label = "Probabilistic Sharpe N=1"
+            else:
+                dsr_label = "Deflated Sharpe"
+            lines.append(f"  {dsr_label} (prob):{self.deflated_sharpe:>7.2f}")
+            if self.dsr_raw_completed_trials is not None:
+                effective = (
+                    self.dsr_effective_trials
+                    if self.dsr_effective_trials is not None
+                    else float(self.dsr_raw_completed_trials)
+                )
+                lines.append(
+                    "    Trials: "
+                    f"raw completed={self.dsr_raw_completed_trials}, "
+                    f"effective N={effective:g}"
+                )
         elif self.deflated_sharpe_reason:
             lines.append(f"  Deflated Sharpe:      n/a ({self.deflated_sharpe_reason})")
-        pbo_render = f"{self.pbo:.2f}" if self.pbo is not None else "n/a"
-        lines.append(f"  PBO:                  {pbo_render:>8}")
-        if self.pbo is None and self.pbo_reason:
-            lines.append(f"    (PBO unavailable: {self.pbo_reason})")
+        rank_failure = self.walk_forward_top_k_rank_failure_rate
+        rank_render = f"{rank_failure:.2f}" if rank_failure is not None else "n/a"
+        lines.append(f"  WF top-K rank failure:{rank_render:>8}")
+        if rank_failure is None and self.rank_stability_reason:
+            lines.append(f"    (unavailable: {self.rank_stability_reason})")
 
         if self.warnings:
             lines.append("")

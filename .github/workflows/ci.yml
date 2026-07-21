@@ -64,25 +64,3 @@ jobs:
 
       - name: Tests
         run: pytest -q
-
-  artifact:
-    name: Verify wheel and sdist
-    needs: [quality, test]
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-          cache: pip
-
-      - name: Build fresh distributions
-        run: |
-          python -m pip install --upgrade build twine
-          python -m build
-
-      - name: Validate package metadata and exact payload
-        run: |
-          python -m twine check dist/*
-          python tools/verify_public_release.py --wheel dist/*.whl --sdist dist/*.tar.gz

@@ -37,10 +37,13 @@ from backtester.walkforward.statistics.overfit import (
     sharpe_decay,
 )
 from backtester.walkforward.statistics.pbo import (
+    is_oos_transfer_distribution,
     pbo_from_selected_ranks,
     pbo_logit_distribution,
     probability_of_backtest_overfitting,
     selected_trial_logit,
+    selected_trial_rank_logit,
+    walk_forward_top_k_rank_failure_rate,
 )
 
 __all__ = [
@@ -50,6 +53,10 @@ __all__ = [
     "deflated_sharpe",
     "probabilistic_sharpe",
     "probability_of_backtest_overfitting",
+    "is_oos_transfer_distribution",
+    "selected_trial_rank_logit",
+    "walk_forward_top_k_rank_failure_rate",
+    # Deprecated 0.12.x aliases:
     "pbo_logit_distribution",
     "pbo_from_selected_ranks",
     "selected_trial_logit",

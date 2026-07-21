@@ -93,46 +93,51 @@ class RiskParityModel(RiskModel):
         prev_rp_weights = None
         prev_signature = None
 
+        weight_values = weights.to_numpy(dtype=float, copy=True)
+        output_values = weight_values.copy()
+        rescore_values = is_rescore.to_numpy(dtype=bool)
+
         for i in range(self.lookback, n):
-            row_w = weights.iloc[i]
-            active_mask = row_w.abs() > 1e-10
-            n_active = active_mask.sum()
-            signature = tuple(np.sign(row_w.to_numpy(dtype=float)))
+            row_w = weight_values[i]
+            active_mask = np.abs(row_w) > 1e-10
+            n_active = int(active_mask.sum())
+            signature = tuple(np.sign(row_w))
 
             if n_active < 2:
                 # Single or no asset — pass through
-                out.iloc[i] = row_w
+                output_values[i] = row_w
                 prev_rp_weights = None
                 prev_signature = signature
                 continue
 
-            if is_rescore.iloc[i] or prev_rp_weights is None or signature != prev_signature:
+            if rescore_values[i] or prev_rp_weights is None or signature != prev_signature:
                 # Compute new risk-parity weights for active instruments
                 window = returns.iloc[max(0, i - self.lookback) : i]
-                active_cols = row_w.index[active_mask]
+                active_cols = weights.columns[active_mask]
                 sub_returns = window[active_cols]
 
                 # ERC solves for positive magnitudes. Transform each return
                 # series by the strategy's sign, then restore those signs to
                 # the solution. This preserves long/short intent while making
                 # risk contributions consistent with the signed portfolio.
-                signs = np.sign(row_w.loc[active_cols].to_numpy(dtype=float))
+                signs = np.sign(row_w[active_mask])
                 cov = sub_returns.mul(signs, axis=1).cov().values
                 rp_w = self._solve_erc(cov, n_active)
 
                 # Build full weight vector
-                full_rp = pd.Series(0.0, index=row_w.index)
-                for j, col in enumerate(active_cols):
-                    full_rp[col] = signs[j] * rp_w[j]
+                full_rp = np.zeros(len(weights.columns), dtype=float)
+                full_rp[active_mask] = signs * rp_w
 
                 # Preserve original total exposure
-                original_exposure = row_w.abs().sum()
+                original_exposure = float(np.nansum(np.abs(row_w)))
                 full_rp = full_rp * original_exposure
 
                 prev_rp_weights = full_rp
                 prev_signature = signature
 
-            out.iloc[i] = prev_rp_weights
+            output_values[i] = prev_rp_weights
+
+        out.iloc[:] = output_values
 
         return out
 

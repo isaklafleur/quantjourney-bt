@@ -9,6 +9,7 @@ both backtester/cli/__init__.py
 both backtester/cli/qj_data.py
 both backtester/cli/qj_data_api.py
 both backtester/cli/qj_data_views.py
+both backtester/cli/strategy_runner.py
 both backtester/core.py
 both backtester/engines/__init__.py
 both backtester/engines/benchmark.py
@@ -108,7 +109,9 @@ sdist benchmarks/README.md
 sdist benchmarks/strategy_suite.md
 sdist CHANGELOG.md
 sdist CONTRIBUTING.md
+sdist WINDOWS.md
 sdist compare/README.md
+sdist docs/performance-0.12.4.md
 sdist docs/public_scope.md
 sdist docs/release.md
 sdist docs/research/backlog.md
@@ -186,4 +189,6 @@ sdist strategies/example_wf_05_optuna_tpe_optimization.py
 sdist strategies/README.md
 sdist strategies/sctr_momentum_regime_gated.py
 sdist strategies/validate_sctr_momentum_regime_gated.py
+sdist strategy.bat
+sdist strategy.py
 sdist strategy.sh

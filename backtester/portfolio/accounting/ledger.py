@@ -18,6 +18,12 @@ import pandas as pd
 
 from backtester.execution.contract_spec import AssetClass, ContractSpec
 from backtester.execution.order_types import Fill, OrderSide
+from backtester.portfolio.weight_cost import (
+    FixedBpsWeightCostModel,
+    WeightCostBreakdown,
+    WeightCostModel,
+    solve_recursive_weight_costs,
+)
 
 ContractSpecResolver = Callable[[str], ContractSpec]
 
@@ -79,10 +85,15 @@ class PortfolioLedger:
         self.initial_cash = float(initial_cash)
         self.instruments = list(instruments)
         self.settlement_currency = settlement_currency
+        self._contract_specs: dict[str, ContractSpec] = {}
 
         def _validated_contract_spec(instrument: str) -> ContractSpec:
-            spec = contract_spec_resolver(instrument)
-            spec.validate_settlement_currency(self.settlement_currency)
+            key = str(instrument)
+            spec = self._contract_specs.get(key)
+            if spec is None:
+                spec = contract_spec_resolver(instrument)
+                spec.validate_settlement_currency(self.settlement_currency)
+                self._contract_specs[key] = spec
             return spec
 
         self._contract_spec = _validated_contract_spec
@@ -109,7 +120,33 @@ class PortfolioLedger:
         self._exposure_value_rows = []
         self._average_entry_rows = []
         self._margin_rows = []
+        self._history_index: pd.Index | None = None
+        self._history_cursor = 0
+        self._history_nav: np.ndarray | None = None
+        self._history_cash: np.ndarray | None = None
+        self._history_positions: np.ndarray | None = None
+        self._history_position_values: np.ndarray | None = None
+        self._history_exposure_values: np.ndarray | None = None
+        self._history_average_entry: np.ndarray | None = None
+        self._history_margin: np.ndarray | None = None
         self._last_nav = self.initial_cash
+
+    def prepare_history(self, dates: Sequence[object] | pd.Index) -> None:
+        """Preallocate a fixed-size recording buffer for a simulator run."""
+        # Reconstruct from scalar labels so ``result()`` retains the legacy
+        # index metadata (notably DatetimeIndex.freq=None from appended rows).
+        index = pd.Index(list(dates))
+        rows = len(index)
+        columns = len(self.instruments)
+        self._history_index = index
+        self._history_cursor = 0
+        self._history_nav = np.empty(rows, dtype=float)
+        self._history_cash = np.empty(rows, dtype=float)
+        self._history_positions = np.empty((rows, columns), dtype=float)
+        self._history_position_values = np.empty((rows, columns), dtype=float)
+        self._history_exposure_values = np.empty((rows, columns), dtype=float)
+        self._history_average_entry = np.empty((rows, columns), dtype=float)
+        self._history_margin = np.empty((rows, columns), dtype=float)
 
     def contract_spec(self, instrument: str) -> ContractSpec:
         """Resolve the immutable contract specification for an instrument."""
@@ -309,44 +346,111 @@ class PortfolioLedger:
     ) -> None:
         """Append one end-of-bar accounting snapshot."""
         margin = self.margin_by_instrument(prices)
+        exposure_values = self.exposure_values(prices)
+        if self._history_index is not None:
+            row = self._history_cursor
+            if row >= len(self._history_index):
+                raise RuntimeError("portfolio history buffer is full")
+            if date != self._history_index[row]:
+                raise ValueError(
+                    "portfolio history date does not match the prepared simulation index"
+                )
+            assert self._history_nav is not None
+            assert self._history_cash is not None
+            assert self._history_positions is not None
+            assert self._history_position_values is not None
+            assert self._history_exposure_values is not None
+            assert self._history_average_entry is not None
+            assert self._history_margin is not None
+            self._history_nav[row] = float(nav)
+            self._history_cash[row] = float(self.cash)
+            for column, instrument in enumerate(self.instruments):
+                self._history_positions[row, column] = float(self.positions.get(instrument, 0.0))
+                self._history_position_values[row, column] = float(
+                    position_values.get(instrument, 0.0)
+                )
+                self._history_exposure_values[row, column] = float(
+                    exposure_values.get(instrument, 0.0)
+                )
+                average_entry = self.average_entry_price.get(instrument)
+                self._history_average_entry[row, column] = (
+                    np.nan if average_entry is None else float(average_entry)
+                )
+                self._history_margin[row, column] = float(margin.get(instrument, 0.0))
+            self._history_cursor += 1
+            return
         self._dates.append(date)
         self._nav_rows.append(float(nav))
         self._cash_rows.append(float(self.cash))
         self._position_rows.append(dict(self.positions))
         self._position_value_rows.append(dict(position_values))
-        self._exposure_value_rows.append(self.exposure_values(prices))
+        self._exposure_value_rows.append(exposure_values)
         self._average_entry_rows.append(dict(self.average_entry_price))
         self._margin_rows.append(margin)
 
     def result(self) -> LedgerResult:
         """Build immutable pandas outputs and validate their identity."""
-        index = pd.Index(self._dates)
-        nav = pd.Series(self._nav_rows, index=index, dtype=float, name="nav")
-        cash = pd.Series(self._cash_rows, index=index, dtype=float, name="cash")
-        positions = pd.DataFrame(
-            self._position_rows, index=index, columns=self.instruments, dtype=float
-        ).fillna(0.0)
-        position_values = pd.DataFrame(
-            self._position_value_rows,
-            index=index,
-            columns=self.instruments,
-            dtype=float,
-        ).fillna(0.0)
-        exposure_values = pd.DataFrame(
-            self._exposure_value_rows,
-            index=index,
-            columns=self.instruments,
-            dtype=float,
-        ).fillna(0.0)
-        average_entry = pd.DataFrame(
-            self._average_entry_rows,
-            index=index,
-            columns=self.instruments,
-            dtype=float,
-        )
-        margin_by_instrument = pd.DataFrame(
-            self._margin_rows, index=index, columns=self.instruments, dtype=float
-        ).fillna(0.0)
+        if self._history_index is not None:
+            rows = slice(0, self._history_cursor)
+            index = self._history_index[rows]
+            assert self._history_nav is not None
+            assert self._history_cash is not None
+            assert self._history_positions is not None
+            assert self._history_position_values is not None
+            assert self._history_exposure_values is not None
+            assert self._history_average_entry is not None
+            assert self._history_margin is not None
+            nav = pd.Series(self._history_nav[rows].copy(), index=index, name="nav")
+            cash = pd.Series(self._history_cash[rows].copy(), index=index, name="cash")
+            positions = pd.DataFrame(
+                self._history_positions[rows].copy(), index=index, columns=self.instruments
+            )
+            position_values = pd.DataFrame(
+                self._history_position_values[rows].copy(),
+                index=index,
+                columns=self.instruments,
+            )
+            exposure_values = pd.DataFrame(
+                self._history_exposure_values[rows].copy(),
+                index=index,
+                columns=self.instruments,
+            )
+            average_entry = pd.DataFrame(
+                self._history_average_entry[rows].copy(),
+                index=index,
+                columns=self.instruments,
+            )
+            margin_by_instrument = pd.DataFrame(
+                self._history_margin[rows].copy(), index=index, columns=self.instruments
+            )
+        else:
+            index = pd.Index(self._dates)
+            nav = pd.Series(self._nav_rows, index=index, dtype=float, name="nav")
+            cash = pd.Series(self._cash_rows, index=index, dtype=float, name="cash")
+            positions = pd.DataFrame(
+                self._position_rows, index=index, columns=self.instruments, dtype=float
+            ).fillna(0.0)
+            position_values = pd.DataFrame(
+                self._position_value_rows,
+                index=index,
+                columns=self.instruments,
+                dtype=float,
+            ).fillna(0.0)
+            exposure_values = pd.DataFrame(
+                self._exposure_value_rows,
+                index=index,
+                columns=self.instruments,
+                dtype=float,
+            ).fillna(0.0)
+            average_entry = pd.DataFrame(
+                self._average_entry_rows,
+                index=index,
+                columns=self.instruments,
+                dtype=float,
+            )
+            margin_by_instrument = pd.DataFrame(
+                self._margin_rows, index=index, columns=self.instruments, dtype=float
+            ).fillna(0.0)
         margin_used = margin_by_instrument.sum(axis=1).rename("margin_used")
         buying_power = (nav - margin_used).rename("buying_power")
         book_weights = weights_from_position_values(position_values, nav)
@@ -438,31 +542,48 @@ def build_weight_ledger(
     prices: pd.DataFrame,
     initial_capital: float,
     rebalance_flags: pd.Series,
-    cost_model: object,
+    cost_model: WeightCostModel,
     contract_spec_resolver: ContractSpecResolver,
     settlement_currency: str = "USD",
-) -> tuple[LedgerResult, object, pd.DataFrame]:
-    """Build the compatibility ledger for vectorized target-weight mode.
+) -> tuple[LedgerResult, WeightCostBreakdown, pd.DataFrame]:
+    """Build the recursive compatibility ledger for target-weight mode.
 
-    This intentionally preserves the existing close-to-close weight accounting
-    and implied-trade cost model. It does not claim that implied trades are
-    broker orders or fills.
+    The path remains close-to-close and uses implied rather than broker fills,
+    but positions, audited trades, costs and post-cost NAV are solved from one
+    self-financing capital trajectory.
     """
-    gross_nav = float(initial_capital) * (1.0 + portfolio_returns).cumprod()
-    if len(gross_nav) > 0:
-        gross_nav.iloc[0] = float(initial_capital)
-    cost_breakdown = cost_model.compute(
-        actual_weights=actual_weights,
-        prices=prices,
-        nav=gross_nav,
-        rebalance_flags=rebalance_flags,
-    )
-    net_returns = portfolio_returns - cost_breakdown.total_cost_pct
-    nav = float(initial_capital) * (1.0 + net_returns).cumprod()
-
     marked_prices = prices.reindex(
         index=actual_weights.index, columns=actual_weights.columns
     ).ffill()
+    trade_unit_values = pd.DataFrame(
+        np.nan,
+        index=actual_weights.index,
+        columns=actual_weights.columns,
+        dtype=float,
+    )
+    specs: dict[str, ContractSpec] = {}
+    for instrument in actual_weights.columns:
+        spec = contract_spec_resolver(instrument)
+        spec.validate_settlement_currency(settlement_currency)
+        specs[instrument] = spec
+        raw_price = prices.reindex(index=actual_weights.index)[instrument].astype(float)
+        with np.errstate(divide="ignore", invalid="ignore"):
+            if spec.inverse:
+                unit_value = spec.multiplier / raw_price
+            else:
+                unit_value = raw_price.abs() * spec.multiplier * spec.lot_size
+        trade_unit_values[instrument] = unit_value.where(raw_price.notna())
+
+    nav, net_returns, cost_breakdown = solve_recursive_weight_costs(
+        actual_weights=actual_weights,
+        prices=prices,
+        gross_returns=portfolio_returns,
+        initial_capital=initial_capital,
+        rebalance_flags=rebalance_flags,
+        cost_model=cost_model,
+        trade_unit_values=trade_unit_values,
+    )
+
     desired_exposure = actual_weights.multiply(nav, axis=0)
     positions = pd.DataFrame(
         0.0,
@@ -473,8 +594,7 @@ def build_weight_ledger(
     position_values = positions.copy()
     exposure_values = positions.copy()
     for instrument in actual_weights.columns:
-        spec = contract_spec_resolver(instrument)
-        spec.validate_settlement_currency(settlement_currency)
+        spec = specs[instrument]
         price = marked_prices[instrument].to_numpy(dtype=float)
         target_value = desired_exposure[instrument].to_numpy(dtype=float)
         # Same per-cell semantics as spec.notional()/the previous scalar loop,
@@ -518,6 +638,16 @@ def build_weight_ledger(
     returns = net_returns.rename("returns")
     position_changes = positions.diff().fillna(positions)
     position_changes.loc[~rebalance_flags.reindex(positions.index).fillna(False), :] = 0.0
+
+    if isinstance(cost_model, FixedBpsWeightCostModel) and not np.allclose(
+        position_changes.to_numpy(dtype=float),
+        cost_breakdown.quantity_deltas.to_numpy(dtype=float),
+        rtol=1e-10,
+        atol=1e-8,
+    ):
+        raise AssertionError(
+            "weight-mode position changes do not reconcile with costed quantity deltas"
+        )
 
     _assert_accounting_identity(nav, cash, position_values)
     return (

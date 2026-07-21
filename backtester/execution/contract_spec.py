@@ -23,6 +23,7 @@ import math
 from collections.abc import Mapping
 from dataclasses import dataclass
 from enum import Enum
+from functools import lru_cache
 from typing import Any
 
 
@@ -530,12 +531,15 @@ def contract_spec_from_mapping(symbol: str, values: Mapping[str, Any]) -> Contra
     )
 
 
-def get_contract_spec(symbol: str) -> ContractSpec:
-    """
-    Look up a ContractSpec by symbol.
-
-    Falls back to default equity spec if not in the registry.
-    """
-    key = str(symbol).strip().upper()
+@lru_cache(maxsize=4096)
+def _get_contract_spec_cached(key: str) -> ContractSpec:
     canonical = key[:-2] if key.endswith(("=F", "=X")) else key
-    return COMMON_SPECS.get(key, COMMON_SPECS.get(canonical, ContractSpec.equity(key)))
+    registered = COMMON_SPECS.get(key)
+    if registered is None:
+        registered = COMMON_SPECS.get(canonical)
+    return registered if registered is not None else ContractSpec.equity(key)
+
+
+def get_contract_spec(symbol: str) -> ContractSpec:
+    """Look up an immutable ContractSpec by normalized symbol."""
+    return _get_contract_spec_cached(str(symbol).strip().upper())

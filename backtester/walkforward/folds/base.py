@@ -23,19 +23,19 @@ class Fold:
 
     Dates are inclusive calendar dates (``pd.Timestamp``).
     The *effective* IS window is ``[train_start, effective_is_end]``
-    after purge/embargo have been applied.
+    after the fixed and percentage-based pre-OOS purge has been applied.
     """
 
     fold_id: int
     scheme: str
 
-    # Raw boundaries (before purge/embargo)
+    # Raw boundaries (before pre-OOS purging)
     train_start: pd.Timestamp
     train_end: pd.Timestamp
     oos_start: pd.Timestamp
     oos_end: pd.Timestamp
 
-    # After purge/embargo (None when no dates are excluded)
+    # After pre-OOS purging (None when no dates are excluded)
     effective_is_end: pd.Timestamp
     purge_start: pd.Timestamp | None  # first excluded date
     purge_end: pd.Timestamp | None  # last excluded date (= oos_start - 1 trading day)

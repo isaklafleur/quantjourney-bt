@@ -85,6 +85,28 @@ class ExecutionSimulator:
         self.ledger.reset()
         instruments = list(close.columns)
         all_dates = close.index
+        self.ledger.prepare_history(all_dates)
+
+        # Align once, then use positional ndarray access inside the hot loop.
+        # Bulk ``.loc`` preserves the previous fail-closed behavior for
+        # missing OHLC labels without paying pandas scalar-indexing overhead
+        # for every bar and instrument.
+        close_values = close.loc[all_dates, instruments].to_numpy(copy=False)
+        open_values = open_.loc[all_dates, instruments].to_numpy(copy=False)
+        high_values = high.loc[all_dates, instruments].to_numpy(copy=False)
+        low_values = low.loc[all_dates, instruments].to_numpy(copy=False)
+        volume_values = np.full((len(all_dates), len(instruments)), np.nan, dtype=float)
+        volume_columns = set(volume.columns)
+        available_volume = [
+            (column, instrument)
+            for column, instrument in enumerate(instruments)
+            if instrument in volume_columns
+        ]
+        if available_volume:
+            selected = [instrument for _column, instrument in available_volume]
+            selected_values = volume.loc[all_dates, selected].to_numpy(copy=False)
+            for selected_column, (output_column, _instrument) in enumerate(available_volume):
+                volume_values[:, output_column] = selected_values[:, selected_column]
         previous_check = getattr(self.fill_engine, "pre_submit_check", None)
         previous_price_validator = getattr(self.fill_engine, "price_validator", None)
         previous_fill_check = getattr(self.fill_engine, "pre_fill_check", None)
@@ -97,24 +119,20 @@ class ExecutionSimulator:
         self.fill_engine.pre_fill_check = self._pre_fill_rejection_reason
 
         try:
-            for date in all_dates:
+            for row, date in enumerate(all_dates):
                 bars: dict[str, BarData] = {}
                 self._current_prices = {}
-                for instrument in instruments:
-                    close_value = close.loc[date, instrument]
+                for column, instrument in enumerate(instruments):
+                    close_value = close_values[row, column]
                     self.ledger.observe_mark(instrument, close_value)
                     self._current_prices[instrument] = close_value
                     bars[instrument] = BarData(
                         timestamp=date,
-                        open=float(open_.loc[date, instrument]),
-                        high=float(high.loc[date, instrument]),
-                        low=float(low.loc[date, instrument]),
+                        open=float(open_values[row, column]),
+                        high=float(high_values[row, column]),
+                        low=float(low_values[row, column]),
                         close=float(close_value),
-                        volume=(
-                            float(volume.loc[date, instrument])
-                            if instrument in volume.columns
-                            else float("nan")
-                        ),
+                        volume=float(volume_values[row, column]),
                     )
 
                 self._risk_prices = {
