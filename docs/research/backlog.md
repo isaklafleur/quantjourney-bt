@@ -18,7 +18,15 @@ branch/worktree: `worktree-low-vol-anomaly` (native worktree tool used,
 same `worktree-<slug>` naming as Quality composite — see that spec for
 why `research/<slug>` isn't used in this environment). Code written
 2026-07-21: `strategies/low_volatility_anomaly.py`, smoke-tested and
-committed on the research branch. Next stage: IMPLEMENT → BACKTEST.
+committed on the research branch. BACKTEST run 2026-07-21: mandatory IR
+gate **FAIL** (IR -0.41, cumulative excess -152pts vs SPY,
+2016-01-04→2026-07-20 — more decisive than Quality composite's -0.26),
+cost-sweep **PASS**, walk-forward **BLOCKED** (same confirmed lake API
+`read_bars` end-date defect as Quality composite, re-bisected today).
+Real regime evidence gathered (COVID/2022 downside protection, +3.09pts
+/+11.74pts vs SPY) — first crisis-analysis data this loop has recorded.
+Full detail: the spec's Results section. No registry row yet. Next
+stage: BACKTEST → REVIEW.
 
 ## Ready (ranked)
 

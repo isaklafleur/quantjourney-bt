@@ -124,13 +124,84 @@ Written before the BACKTEST stage runs.
 
 ## Results
 
-_Not yet run. Next stage: IMPLEMENT._
+BACKTEST run 2026-07-21. Infra preflight passed (Lake API `/docs` 200;
+MinIO `pit_sp500_ticker_universe` returned 709 tickers). Full-period run
+(`Backtester(source="minio")`, 2016-01-04 → 2026-07-20, 709-ticker PIT
+S&P 500 universe, monthly `BME` rebalance, 10bps weight cost):
+Sharpe 0.68 (`portfolio_data.sharpe_ratio`; the printed headline report's
+0.83 figure uses a different `periods_per_year`/annualization convention
+— both computed from the same `equity_curve.csv` returns, not a
+discrepancy in the underlying data), Annualized Return 10.58%, Total
+Return 188.79%, Max Drawdown -30.40%, Ann. Volatility 13.21%, Ann.
+Turnover 370.88% (higher than Quality composite's 200% despite a
+narrower quintile holding set — monthly rebalance on a continuously-
+drifting `vol_60d` rank churns the roster more than quarterly fundamental
+rebalance did).
+
+- **Mandatory IR-vs-benchmark gate: FAIL, more decisively than Quality
+  composite.** Computed directly from `excess_return`/`active_return`'s
+  aligned-series primitives against `local_lake.read_pit`-sourced SPY
+  daily returns (2016-01-04→2026-07-20, 2644 aligned trading days):
+  annualized active return -4.55%/yr, annualized tracking error 11.08%,
+  **IR -0.41** (vs. Quality composite's -0.26), cumulative excess return
+  -152.47 pts over the decade. The lowest-vol quintile has been
+  decisively beaten by lazy SPY beta over this specific full-period
+  window.
+- **Mandatory cost-sweep gate: PASS.** Ran the strategy directly (not
+  via a report-generating full run — `save_portfolio_plots=False`/
+  `show_text_reports=False` for speed) at 0/5/10/20 bps total weight
+  cost: Sharpe 0.72 → 0.70 → 0.68 → 0.64, total return 206.67% →
+  197.60% → 188.79% → 171.95%. Degrades smoothly, doesn't collapse —
+  the edge (such as it is) isn't a cost-sweep-fragile artifact of the
+  370% turnover.
+- **Mandatory walk-forward gate: BLOCKED, same confirmed infra defect as
+  Quality composite.** Re-bisected `lake_api.read_bars` before spending
+  a full `WalkForwardEngine` run against a known-bad server (per the
+  precedent set in Quality composite's 2026-07-20 21:35 BACKTEST run):
+  `end=2020-01-01` → 0 rows, `end=2023-06-15` → 0 rows, `end=2026-07-03`
+  → 0 rows, `end=2026-07-20` → 5292 rows — the `knowledge.md` defect
+  (zero rows for any `end` outside roughly the last 2-3 weeks of
+  wall-clock time) is unchanged and confirmed to still apply today. A
+  rolling train=24mo/test=6mo walk-forward over 2016-2026 would have
+  essentially every fold's `end` fall outside that window (only the
+  final fold or two would land inside it), so a full run was skipped as
+  not worth the runtime to reproduce an already-predictable "almost all
+  folds fail" result — same judgment call as Quality composite's second
+  BACKTEST attempt. Deflated Sharpe and PBO are consequently also
+  blocked/unavailable (PBO's unavailability is separately expected: no
+  optimizer, no tuned params).
+- **Regime evidence (diagnostic, computed from `equity_curve.csv` vs.
+  the same SPY series used for the IR gate — real numbers, not
+  fabricated, ahead of the formal REVIEW distillation below):**
+  - COVID crash (2020-02-19 → 2020-03-23): strategy -30.31% vs. SPY
+    -33.40% — **+3.09 pts** of downside protection.
+  - 2022 bear market (2022-01-03 → 2022-10-12): strategy -12.32% vs.
+    SPY -24.06% — **+11.74 pts** of downside protection.
+  - No GFC window in range (data starts 2016-01-04).
 
 ## Regime evidence
 
-_Not yet gathered. Deferred to REVIEW, per the evaluation plan's
-pre-registered expectation above._
+Both available crisis windows (COVID crash, 2022 bear market) show the
+classic low-vol defensive signature: meaningfully smaller drawdowns than
+SPY in both (+3.09 pts and +11.74 pts respectively) — this **contradicts**
+a naive reading of the spec's pre-registered "underperforms in strong
+momentum-driven bull markets" expectation taken as a blanket prediction,
+but actually **confirms the more precise mechanism** behind that same
+expectation: the anomaly protects on the downside during crises (both
+windows), and the full-period IR fails not because the crisis behavior is
+wrong but because 2016-2026 is dominated by a long momentum/mega-cap-
+growth bull stretch between crises, where leverage-constrained investors'
+bid-up of high-beta names (Frazzini & Pedersen) erodes the low-vol
+quintile's *absolute* returns relative to SPY for most of the window —
+exactly the risk-based tradeoff the hypothesis describes, just decisively
+net negative vs. a lazy benchmark over this particular full-period
+sample. Worth a `knowledge.md` lesson at REVIEW: the first real regime
+evidence this loop has gathered (Quality composite's OOS run never
+reached crisis-analysis).
 
 ## Verdict & lessons
 
-_Not yet reached. Deferred to REVIEW._
+Deferred to REVIEW (next stage: BACKTEST → REVIEW) — this file records
+BACKTEST's real, already-decisive results; the registry row, formal
+verdict, and `knowledge.md` distillation happen in that separate run per
+the skill's one-stage-per-run rule.
