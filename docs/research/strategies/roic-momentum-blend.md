@@ -1,9 +1,11 @@
 # ROIC + momentum blend — research spec
 
-- **Status:** WIP (spec written 2026-07-22; code written 2026-07-22 on
-  `worktree-roic-momentum`, commit `2f840df`; BACKTEST completed
-  2026-07-22 after routing around the shared-engine bug via a
-  universe exclusion — see Results below; next stage BACKTEST → REVIEW)
+- **Status:** REVIEW complete 2026-07-22 — **Verdict: Improve**. Spec
+  written 2026-07-22; code written 2026-07-22 on `worktree-roic-momentum`,
+  commit `2f840df`; BACKTEST completed 2026-07-22 after routing around
+  the shared-engine bug via a universe exclusion — see Results below.
+  Branch left parked, not merged. Follow-up idea ("ROIC + momentum blend
+  v2: sequential screen") spawned to the Ready backlog.
 - **Family:** Fundamental × technical combination
 - **Promoted from backlog:** 2026-07-22, rank 1
 
@@ -246,8 +248,54 @@ prediction was pre-registered for this combination.
 
 See the Results section above (COVID +1.82pts, 2022 bear +4.51pts vs SPY,
 both crisis windows outperformed, milder than the low-volatility family's
-protection). Full REVIEW-stage synthesis to follow.
+protection). No a-priori regime prediction was pre-registered for this
+fundamental×technical combination; the observed consistent (both-window)
+protection most plausibly reflects the ROIC leg's quality-linked
+defensiveness, analogous to the mechanism behind Quality composite's
+(unmeasured, due to that trial's infra blocker) and the low-volatility
+family's confirmed regime signature.
 
 ## Verdict & lessons
 
-Not yet reached — filled in at REVIEW.
+**Verdict: Improve.**
+
+The mandatory IR-vs-benchmark gate fails decisively (-0.2205 — worse
+than Value composite's near-zero -0.059, but better than Quality
+composite's -0.26), and the mandatory walk-forward gate remains
+BLOCKED by the standing lake API recency defect (7th consecutive trial
+confirming it unchanged). The mandatory cost-sweep gate passes with
+moderate decay (~14.1%), between Value composite's mildest (~2.3%) and
+PEAD's steepest (~22%), consistent with a monthly rebalance cadence.
+
+The deciding factor is regime evidence, not the IR magnitude alone:
+unlike Quality composite (evidence never gathered) or PEAD (mixed,
+non-compensating), ROIC + momentum blend showed consistent outperformance
+in *both* available crisis windows (COVID +1.82pts, 2022 bear +4.51pts
+vs SPY) — milder than the low-volatility family's protection, but the
+same qualitative pattern that motivated Improve there. This suggests the
+ROIC leg is doing real defensive work, but its effect may be diluted by
+the momentum leg through the z-score-nanmean blend: a high-`ret_60d`,
+weak-ROIC name can still clear the top-quartile cutoff on a blended
+score, which is exactly the kind of name unlikely to carry the ROIC
+leg's defensive characteristic.
+
+Follow-up idea spawned to the Ready backlog: **"ROIC + momentum blend
+v2: sequential screen"** — replace the blended z-score combination with
+a two-step filter (top-half ROIC screen, then rank the surviving names
+by `ret_60d` momentum) to test whether isolating the ROIC leg's
+defensiveness from momentum-driven dilution improves the IR gate while
+preserving (or strengthening) the regime protection.
+
+Separately, disclosed for completeness: this trial's BACKTEST needed a
+12-ticker universe exclusion (`AET`/`ANDV`/`BK`/`BMS`/`COL`/`CSRA`/
+`ESRX`/`EVHC`/`HOT`/`SATS`/`SCG`/`TWX`) to route around the shared-engine
+delisted-name ledger bug (`backtester/portfolio/weight_cost.py`). That
+bug is now fixed on `main` (commit `a44a703`, 2026-07-22, landed after
+this trial's BACKTEST and outside the loop's normal process) — a
+full-universe re-run was not performed here (one-stage-per-run), but the
+excluded names were confirmed M&A-driven delistings rather than
+bankruptcies, so the numbers above are not expected to change materially
+if re-run on the full 709-ticker universe.
+
+Branch `worktree-roic-momentum` left parked (not merged, not deleted)
+per the Improve verdict's git action.
