@@ -15,13 +15,15 @@ no intraday, futures, forex, options, or order flow.
 - **ROIC + momentum blend** — promoted 2026-07-22, rank 1. Spec written
   at `docs/research/strategies/roic-momentum-blend.md`; code written at
   `strategies/roic_momentum_blend.py` on branch `worktree-roic-momentum`
-  (commit `2f840df`). BACKTEST attempted 2026-07-22, BLOCKED — crashed
-  on a shared-engine bug (`ledger.py:648` reconciliation assertion,
-  triggered by holding a delisted PIT name's frozen weight across
-  multiple rebalances; see `knowledge.md`). No strategy-level workaround;
-  needs either an engine fix on `main` or a routing decision at a future
-  run. Next stage: still BACKTEST (not advanced — no usable results
-  exist to REVIEW).
+  (commit `2f840df`). BACKTEST completed 2026-07-22 by excluding the 12
+  known-buggy delisted tickers (`AET`/`ANDV`/`BK`/`BMS`/`COL`/`CSRA`/
+  `ESRX`/`EVHC`/`HOT`/`SATS`/`SCG`/`TWX`) from the PIT universe for this
+  run only (routing around the shared-engine bug, not a strategy-code
+  change; see `knowledge.md`/spec). Real results: IR -0.2205 (FAIL),
+  cost-sweep PASS (~14.1% decay), walk-forward BLOCKED (standing lake API
+  defect, 7th trial), regime evidence mildly protective in both crisis
+  windows (COVID +1.82pts, 2022 bear +4.51pts vs SPY). Next stage:
+  BACKTEST → REVIEW.
 
 ## Ready (ranked)
 

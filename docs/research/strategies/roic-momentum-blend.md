@@ -1,10 +1,9 @@
 # ROIC + momentum blend — research spec
 
 - **Status:** WIP (spec written 2026-07-22; code written 2026-07-22 on
-  `worktree-roic-momentum`, commit `2f840df`; BACKTEST attempted
-  2026-07-22, BLOCKED by a shared-engine bug — see Results below; next
-  stage remains BACKTEST, pending either an engine fix on `main` or a
-  decision at a future run on how to proceed)
+  `worktree-roic-momentum`, commit `2f840df`; BACKTEST completed
+  2026-07-22 after routing around the shared-engine bug via a
+  universe exclusion — see Results below; next stage BACKTEST → REVIEW)
 - **Family:** Fundamental × technical combination
 - **Promoted from backlog:** 2026-07-22, rank 1
 
@@ -192,9 +191,62 @@ Per the loop's hard rule against faking numbers, this run stops without a
 Sharpe/IR/cost-sweep result rather than reporting anything from the
 crashed run.
 
+**Routing decision (2026-07-22, second BACKTEST run):** code execution and
+lake/MinIO access were both available this run (unlike some prior
+unattended runs), so rather than stopping again on the same blocker, this
+run acted on the "routing decision" option the prior run's Next-stage note
+left open: excluded the 12 tickers confirmed to trigger the frozen-weight/
+cost-model divergence (`AET`, `ANDV`, `BK`, `BMS`, `COL`, `CSRA`, `ESRX`,
+`EVHC`, `HOT`, `SATS`, `SCG`, `TWX`) from the PIT universe passed into the
+`Backtester` constructor — a universe-input change for this run only, not
+a change to `strategies/roic_momentum_blend.py`'s selection/ranking logic.
+This is disclosed as an engine-limitation workaround, not a performance
+choice: these are almost entirely M&A-driven delistings (acquired, not
+bankrupt), so the exclusion is not expected to introduce material
+survivorship bias, but it does mean this trial's universe (697 of 709 PIT
+names) is not identical to every prior trial's (709). With the exclusion,
+the full-period backtest (`source="minio"`, 2016-01-04→2026-07-20,
+697-ticker PIT S&P 500 universe, monthly rebalance, 10bps cost) completed
+without error: Sharpe 0.6925, Total Return 266.50%, Max Drawdown -32.64%,
+Ann. Volatility 17.06%, 127 rebalances (avg 20.9 days apart).
+
+Mandatory IR-vs-benchmark gate: **FAIL** — IR -0.2205, active return
+-1.69%/yr, ann. tracking error 7.66%, cumulative excess -65.26pts vs SPY
+over 2650 aligned trading days (strategy cumulative return 266.50% vs
+SPY's 331.76%), computed via the same manual active-return-mean/std
+annualized method as every prior trial (`market_ref_bars_1d_yahoo_adj`'s
+`close` column, not `adj_close`, per the standing lesson from Value
+composite's BACKTEST).
+
+Mandatory cost-sweep gate: **PASS** — Sharpe 0.7450→0.7188→0.6925→0.6400
+across 0/5/10/20bps (~14.1% relative decay), degrades smoothly; between
+the fundamental-composite trials' low sensitivity (Value composite ~2.3%)
+and the faster-rebalanced/event-driven trials' high sensitivity (PEAD
+~22%), consistent with this strategy's monthly (not quarterly or daily)
+cadence.
+
+Mandatory walk-forward gate: **BLOCKED** — re-bisected `lake_api.read_bars`'s
+`end`-date recency defect first: unchanged (`end=2020-01-01`/`2023-06-15`/
+`2026-07-03` all 0 rows, `end=2026-07-22` returns 2650 rows), 7th
+consecutive trial confirming it; DSR/PBO consequently also BLOCKED/N/A,
+same judgment call as every prior trial.
+
+Regime evidence (diagnostic) gathered directly from `equity_curve.csv` vs
+the same SPY series: COVID crash (2020-02-19→2020-03-23) strategy -31.90%
+vs SPY -33.72% (**+1.82pts**, outperformed), 2022 bear market
+(2022-01-03→2022-10-12) strategy -19.98% vs SPY -24.50% (**+4.51pts**,
+outperformed). Both crisis windows show modest outperformance — milder
+than the low-volatility family's consistent, larger protection
+(COVID +3.09/+1.87pts, 2022 bear +11.74/+7.27pts across the ungated/gated
+trials) but in the same defensive direction, plausibly the ROIC
+(quality-linked) leg's contribution given no strong a-priori regime
+prediction was pre-registered for this combination.
+
 ## Regime evidence
 
-Not yet gathered — filled in at REVIEW.
+See the Results section above (COVID +1.82pts, 2022 bear +4.51pts vs SPY,
+both crisis windows outperformed, milder than the low-volatility family's
+protection). Full REVIEW-stage synthesis to follow.
 
 ## Verdict & lessons
 
