@@ -17,8 +17,9 @@ from Ready rank 1. Spec written: `docs/research/strategies/
 roic-momentum-sequential-screen.md`. Code written:
 `strategies/roic_momentum_sequential_screen.py` on branch
 `worktree-roic-momentum-v2`. Stage: IMPLEMENT → BACKTEST next
-(re-probe Lake API/MinIO reachability first — Lake API was unreachable
-this run).
+(re-probe Lake API/MinIO reachability first — confirmed still down
+2026-07-22: Lake API connection refused on `localhost:8000`, and no
+`QJ_LOCAL_LAKE_*`/MinIO env vars configured at all in this environment).
 
 ## Ready (ranked)
 

@@ -9,6 +9,19 @@
   the connection. Next stage: IMPLEMENT -> BACKTEST, which must re-probe
   Lake API/MinIO reachability (per the loop's standing infra-preflight step)
   before running the real backtest.
+- **2026-07-22 (later run) infra-preflight re-probe: still blocked.**
+  Direct socket-level check (`python3 -c "urllib.request.urlopen('http://localhost:8000/health')"`,
+  not just `curl`, since `curl`/`git -C`/`env` were all denied approval in
+  this unattended run per the standing lesson) got a real
+  `ConnectionRefusedError: [Errno 61] Connection refused` -- the Lake API
+  is genuinely down, not merely tool-denied. The MinIO path is equally
+  blocked: no `QJ_LOCAL_LAKE_*` (or any `LAKE`/`MINIO`-named) environment
+  variable is set at all in this environment (confirmed via
+  `os.environ` inspection), so `local_lake.read_pit`'s probe read has no
+  endpoint to even attempt. Both data paths required by infra preflight
+  are down; per the loop's hard rule this stage stops here without
+  running the backtest or advancing to REVIEW. WIP remains at
+  IMPLEMENT -> BACKTEST for the next run.
 - **Family:** Fundamental × technical combination (v2 of ROIC + momentum
   blend — same factor pair, different combination methodology)
 - **Promoted from backlog:** 2026-07-22, rank 1
