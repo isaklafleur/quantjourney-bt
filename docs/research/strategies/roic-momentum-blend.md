@@ -1,6 +1,7 @@
 # ROIC + momentum blend — research spec
 
-- **Status:** WIP (promoted 2026-07-22; spec written, no code yet)
+- **Status:** WIP (spec written 2026-07-22; code written 2026-07-22 on
+  `worktree-roic-momentum`, commit `2f840df`; next stage: BACKTEST)
 - **Family:** Fundamental × technical combination
 - **Promoted from backlog:** 2026-07-22, rank 1
 
@@ -28,29 +29,23 @@ prior of profitability either way.
 
 ## Data & universe
 
-- `roic_features` via `backtester.lake_api.read_features` — one of the
-  six research-tier feature datasets in the served catalog (Data scope),
-  so the data prerequisite check at PROMOTE passes. Its real column
-  schema (the backlog's assumed `roic` field), null rate, and
-  `knowledge_time` behavior are all unconfirmed in-repo (no live probe
-  or fixture found) and are deferred to a mandatory IMPLEMENT-time live
-  probe rather than guessed here — every prior research-tier dataset
-  this loop has actually probed differed from its initial assumption in
-  some way (`quality_features`' ~50-58% null rate, `value_features`'
-  much-lower ~16.9% null rate, `technical_features`' bulk-clustered
-  `knowledge_time`, `earnings_surprise`'s fiscal-Q4 gap).
+- `roic_features` via `backtester.lake_api.read_features` — confirmed
+  live (IMPLEMENT 2026-07-22, 7-ticker probe): columns include `ticker`,
+  `event_time`, `cik`, `knowledge_time`, `nopat`, `invested_capital`,
+  `roic`, plus several intermediate NOPAT-derivation fields. `roic` is
+  null on ~53.75% of rows (chained through `nopat`/`pretax_income`/
+  `effective_tax_rate` all nulling together on the same rows) — comparable
+  in magnitude to `quality_features.gross_profitability`'s ~50-58%, though
+  independently confirmed, not assumed by analogy. `knowledge_time` is
+  genuinely spread 2009-2026 (fiscal-filing-anchored), matching
+  `quality_features`' pattern, not `technical_features`' bulk-clustered
+  one — confirms the spec's working assumption.
 - `technical_features.ret_60d` via the same `read_features` path —
-  `technical_features` itself is already confirmed live and
-  event_time-anchored by the Low-volatility anomaly trial (bulk-clustered
-  `knowledge_time` near "now"; its sibling column `vol_60d` is pivoted
-  directly on `event_time`, mirroring `backtester.local_data.
-  _sctr_rank_panel`). `ret_60d` is *expected*, not yet directly
-  confirmed, to share `vol_60d`'s event_time/knowledge_time behavior
-  since both are columns of the same dataset — a working assumption to
-  verify at IMPLEMENT, not a certainty (coverage/cadence properties
-  don't reliably transfer even within one dataset, per the standing
-  lesson from `value_features` vs. `quality_features`'s independent
-  null rates).
+  confirmed live and column-present (IMPLEMENT 2026-07-22): null on
+  <1% of rows, `knowledge_time` bulk-clustered within hours of the read
+  (unlike `roic_features`), `event_time` spans 1990-2026. Confirms the
+  spec's working assumption that `ret_60d` shares `vol_60d`'s
+  event_time/knowledge_time behavior (both columns of the same dataset).
 - Universe: PIT S&P 500 membership (`pit_sp500_ticker_universe`) — same
   choice as every prior WIP in this loop.
 - Date range: 2016-01-01 to present, matching every prior trial;

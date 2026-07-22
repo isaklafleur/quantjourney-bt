@@ -13,8 +13,9 @@ no intraday, futures, forex, options, or order flow.
 ## WIP (max 1)
 
 - **ROIC + momentum blend** — promoted 2026-07-22, rank 1. Spec written
-  at `docs/research/strategies/roic-momentum-blend.md` on branch
-  `worktree-roic-momentum`. Next stage: SPEC -> IMPLEMENT.
+  at `docs/research/strategies/roic-momentum-blend.md`; code written at
+  `strategies/roic_momentum_blend.py` on branch `worktree-roic-momentum`
+  (commit `2f840df`). Next stage: IMPLEMENT -> BACKTEST.
 
 ## Ready (ranked)
 
