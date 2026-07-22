@@ -15,7 +15,13 @@ no intraday, futures, forex, options, or order flow.
 - **ROIC + momentum blend** — promoted 2026-07-22, rank 1. Spec written
   at `docs/research/strategies/roic-momentum-blend.md`; code written at
   `strategies/roic_momentum_blend.py` on branch `worktree-roic-momentum`
-  (commit `2f840df`). Next stage: IMPLEMENT -> BACKTEST.
+  (commit `2f840df`). BACKTEST attempted 2026-07-22, BLOCKED — crashed
+  on a shared-engine bug (`ledger.py:648` reconciliation assertion,
+  triggered by holding a delisted PIT name's frozen weight across
+  multiple rebalances; see `knowledge.md`). No strategy-level workaround;
+  needs either an engine fix on `main` or a routing decision at a future
+  run. Next stage: still BACKTEST (not advanced — no usable results
+  exist to REVIEW).
 
 ## Ready (ranked)
 

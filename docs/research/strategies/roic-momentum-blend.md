@@ -1,7 +1,10 @@
 # ROIC + momentum blend — research spec
 
 - **Status:** WIP (spec written 2026-07-22; code written 2026-07-22 on
-  `worktree-roic-momentum`, commit `2f840df`; next stage: BACKTEST)
+  `worktree-roic-momentum`, commit `2f840df`; BACKTEST attempted
+  2026-07-22, BLOCKED by a shared-engine bug — see Results below; next
+  stage remains BACKTEST, pending either an engine fix on `main` or a
+  decision at a future run on how to proceed)
 - **Family:** Fundamental × technical combination
 - **Promoted from backlog:** 2026-07-22, rank 1
 
@@ -132,7 +135,62 @@ Written before the BACKTEST stage runs.
 
 ## Results
 
-Not yet run — filled in at BACKTEST.
+**BLOCKED — no results obtained.** Infra preflight passed (Lake API
+`/docs` 200; MinIO `pit_sp500_ticker_universe` 709 tickers via
+`.env`-configured probe). Re-bisected the standing `lake_api.read_bars`/
+`read_features` recency defect first: unchanged (`end=2020-01-01`/
+`2023-06-15`/`2026-07-03` all 0 rows, `end=2026-07-22` returns 1896
+rows) — 6th consecutive trial confirming it, so walk-forward would have
+been BLOCKED as usual. But the run never got that far: the full-period
+backtest itself (`source="minio"`, 2016-01-01→2026-07-22, 709-ticker PIT
+S&P 500 universe, monthly rebalance, 10bps cost) crashed with
+`AssertionError: weight-mode position changes do not reconcile with
+costed quantity deltas` at `backtester/portfolio/accounting/ledger.py:648`,
+before any Sharpe/IR/report could be produced — a strictly worse outcome
+than every prior trial in this loop, which at least got full-period
+numbers even when walk-forward was blocked.
+
+Root-caused via `systematic-debugging` (traceback-frame inspection of the
+real run's `position_changes` vs. `cost_breakdown.quantity_deltas`
+DataFrames at the assertion site, 465 diverging cells): this is a
+genuine bug in the shared engine
+(`backtester/portfolio/weight_cost.py::FixedBpsWeightCostModel.compute`),
+not in `strategies/roic_momentum_blend.py`. The rebalance engine
+(`backtester/portfolio/rebalance.py`) freezes an instrument's weight at
+its last valid mark once its price permanently disappears (delisting) —
+logged as a `UserWarning` this run for `AET`/`ANDV`/`BK`/`BMS`/`COL`/
+`CSRA`/`ESRX`/`EVHC`/`HOT`/`SATS`/`SCG`/`TWX`. With weight frozen but NAV
+still drifting, the ledger's own `position_changes` audit (computed from
+`marked_prices = prices.ffill()`) correctly shows a nonzero implied
+quantity change at every subsequent rebalance (`target_value = frozen
+weight × NAV`, divided by the frozen price). But
+`FixedBpsWeightCostModel.compute()` additionally masks its
+`quantity_deltas` to `0.0` wherever the *raw* (non-forward-filled) price
+is NaN (`quantity_deltas.mask(px.isna(), 0.0)`,
+`backtester/portfolio/weight_cost.py:103`) — which is permanently true
+for a delisted name — so the two audit trails are guaranteed to diverge
+whenever a frozen/delisted instrument's weight stays nonzero across
+multiple post-delisting rebalances. First confirmed divergence: CSRA,
+2018-04-30 (`position_changes=-0.295`, `quantity_deltas=0.0`); 5 total
+instruments (`CSRA`, `ANDV`, `AET`, `ESRX`, `SCG`) affected across 465
+cells before the assertion (added in commit `21c53a5`, "fix: reconcile
+costs and causal open fills") halted the run at the first mismatch.
+
+This is data-dependent, not signal-dependent — any weight-mode strategy
+holding a PIT-universe name through a real delisting event across enough
+rebalances afterward would trip it. ROIC + momentum blend is simply the
+first WIP in this loop's history to do so (prior trials' selections
+apparently never held one of these specific names that long past
+delisting). No strategy-level workaround exists: the freeze is enforced
+by `RebalanceEngine` regardless of what `_compute_weights` signals for
+future dates, once an instrument's price has gone permanently NaN.
+Fixing it requires a change to shared `backtester/portfolio/weight_cost.py`
+code, which is out of scope for a single research-loop stage (this loop's
+`docs/research/`-only commit discipline and one-stage-per-run throttle
+both assume strategy-file-only code changes, not shared-engine patches).
+Per the loop's hard rule against faking numbers, this run stops without a
+Sharpe/IR/cost-sweep result rather than reporting anything from the
+crashed run.
 
 ## Regime evidence
 
