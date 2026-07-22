@@ -13,9 +13,9 @@ no intraday, futures, forex, options, or order flow.
 ## WIP (max 1)
 
 **Value composite** — promoted 2026-07-21 (Ready rank 1). Spec:
-`docs/research/strategies/value-composite.md`. Research branch/worktree
-`worktree-value-composite` created. Stage: SPEC written, next is
-SPEC → IMPLEMENT.
+`docs/research/strategies/value-composite.md`. Code written:
+`strategies/value_composite.py` on `worktree-value-composite` (commit
+`4faac4d`). Stage: IMPLEMENT done, next is IMPLEMENT → BACKTEST.
 
 ## Ready (ranked)
 

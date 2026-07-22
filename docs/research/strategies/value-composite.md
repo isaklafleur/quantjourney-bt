@@ -1,12 +1,18 @@
 # Value composite — research spec
 
-- **Status:** WIP (SPEC written; branch created, no code yet)
+- **Status:** WIP (code written, smoke-tested; next stage IMPLEMENT →
+  BACKTEST)
 - **Family:** Fundamental value
 - **Promoted from backlog:** 2026-07-21, rank 1
-- **Code:** none yet. Research branch/worktree `worktree-value-composite`
-  created via the native worktree tool (same reason as prior WIPs: this
-  session's Bash tool cannot be relied on to approve ref-mutating git
-  commands unattended). Branched from `main`. Next stage: SPEC → IMPLEMENT.
+- **Code:** `strategies/value_composite.py` on `worktree-value-composite`
+  (commit `4faac4d`). Reused `quality_composite.py`'s
+  `_fetch_market_data`-override/graft pattern; earnings-yield and
+  book-to-market are each cross-sectional z-scored then combined via
+  elementwise nanmean (fallback to earnings-yield-only when
+  book-to-market is null). Smoke-tested end-to-end on 10 tickers over a
+  recent window (3/10 names selected at the top-quartile cutoff, weights
+  capped at 0.10, all-finite signal); full `pytest tests/ -q` green (201
+  passed).
 
 ## Hypothesis
 
@@ -31,24 +37,25 @@ test rather than assume.
 ## Data & universe
 
 - `backtester.lake_api.read_features("value_features", tickers=..., as_of=...)`
-  — expected to carry `eps` and `book_value_per_share` per the backlog
-  idea's framing; unconfirmed against the live server or any fixture in
-  this repo (same caveat every prior spec has flagged for its own
-  dataset) — must be live-probed at IMPLEMENT before writing any ranking
-  code, not assumed.
+  — confirmed live at IMPLEMENT (2026-07-22, PIT S&P 500 universe probe,
+  709 tickers / 1072 rows): columns are `ticker`, `event_time`, `cik`,
+  `knowledge_time`, `eps`, `stockholders_equity`, `shares_outstanding`,
+  `book_value_per_share`, `source`, `dataset` — `eps` and
+  `book_value_per_share` both present as the backlog idea assumed.
 - Needs joining against daily price (`equity_bars_1d_yahoo_adj` via
   `backtester.lake_api.read_bars`, same source every prior strategy in
   this loop uses for eligibility/mode data) to form the two ratios:
   earnings yield = `eps` / `adj_close`, book-to-market =
   `book_value_per_share` / `adj_close`.
-- `book_value_per_share` is reported null for roughly half of
-  company-years per `value_features`'s own source docstring (nearest-join
-  tolerance misses) — confirm the real null rate at IMPLEMENT (as
-  `quality_composite`'s `gross_profitability` null rate turned out to
-  need live confirmation, not the docstring's word) and design the
-  composite to fall back to earnings-yield-only explicitly when
-  book-to-market is missing, mirroring `quality_composite.py`'s
-  elementwise-nanmean pattern rather than silently dropping rows.
+- `book_value_per_share` is null for ~16.9% of rows (confirmed by the
+  same live probe, 709-ticker PIT S&P 500 sample) — much lower than the
+  ~50% this spec initially guessed by analogy to `quality_features`'
+  `gross_profitability`; the two datasets' null rates are independent
+  properties, not transferable (same lesson `quality_composite` already
+  taught: verify, don't assume, per-dataset). The composite falls back to
+  earnings-yield-only explicitly for that ~17%, mirroring
+  `quality_composite.py`'s elementwise-nanmean pattern rather than
+  silently dropping rows. `eps` itself is null for 0% of rows.
 - Universe: PIT S&P 500 membership via
   `backtester.local_lake.pit_sp500_ticker_universe` — same choice as
   every prior WIP in this loop, for the same reason (reasonably liquid,
@@ -56,12 +63,10 @@ test rather than assume.
 - Date range: 2016-01-01 to present, matching every prior trial's range;
   `value_features` coverage before that is unconfirmed and should be
   checked at IMPLEMENT, not assumed here.
-- `event_time`/`knowledge_time` behavior for `value_features` is
-  unconfirmed — check directly at IMPLEMENT whether it follows
-  `quality_features`' (genuinely spread across history) or
-  `technical_features`' (bulk-clustered near "now") pattern, per
-  `knowledge.md`'s standing lesson not to assume one dataset's
-  knowledge_time shape from another's.
+- `knowledge_time` is genuinely spread across history (2009-2026 in the
+  same probe), matching `quality_features`' pattern rather than
+  `technical_features`' bulk-clustered-near-"now" pattern — confirmed
+  directly, not assumed, per `knowledge.md`'s standing lesson.
 
 ## Implementation notes
 
