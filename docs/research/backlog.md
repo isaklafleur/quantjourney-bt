@@ -15,7 +15,9 @@ no intraday, futures, forex, options, or order flow.
 **Value composite** — promoted 2026-07-21 (Ready rank 1). Spec:
 `docs/research/strategies/value-composite.md`. Code written:
 `strategies/value_composite.py` on `worktree-value-composite` (commit
-`4faac4d`). Stage: IMPLEMENT done, next is IMPLEMENT → BACKTEST.
+`4faac4d`). Stage: BACKTEST done (IR -0.059 FAIL but closest-to-zero of
+any trial so far, cost sweep PASS, walk-forward BLOCKED per the
+standing lake API defect), next is BACKTEST → REVIEW.
 
 ## Ready (ranked)
 

@@ -1,7 +1,6 @@
 # Value composite — research spec
 
-- **Status:** WIP (code written, smoke-tested; next stage IMPLEMENT →
-  BACKTEST)
+- **Status:** WIP (BACKTEST complete; next stage BACKTEST → REVIEW)
 - **Family:** Fundamental value
 - **Promoted from backlog:** 2026-07-21, rank 1
 - **Code:** `strategies/value_composite.py` on `worktree-value-composite`
@@ -131,11 +130,73 @@ Written before the BACKTEST stage runs.
 
 ## Results
 
-_Not yet run — filled in at BACKTEST._
+Filled in at BACKTEST (2026-07-22). Infra preflight: Lake API `/docs`
+200 (default `http://localhost:8000`, no `QJ_LAKE_API_URL` override in
+`.env`); MinIO `pit_sp500_ticker_universe` returned 500 tickers on a
+small probe read. Re-bisected the standing `lake_api.read_bars` `end`-
+date recency defect before committing to a walk-forward run: unchanged
+— `end=2020-01-01`/`2023-06-15`/`2026-07-03` all return 0 rows,
+`end=2026-07-22` returns 1896 rows (single-ticker probe), 5th
+consecutive trial confirming it. All runs: `Backtester(source="minio")`,
+`benchmark_symbol="SPY"`, `weight_cost_model=FixedBpsWeightCostModel
+(total_bps=10.0)` unless noted, PIT S&P 500 universe (709 tickers ever-
+members), 2016-01-01 to 2026-07-20.
+
+**Full-period backtest** (`strategies/value_composite.py`'s own
+`main()`): Sharpe 0.74 (performance-report table) / 0.6407 (summary
+footer — same two-report-surface annualization-convention discrepancy
+noted for every prior trial in this loop), CAGR 13.77%, Total Return
+289.66%, Max Drawdown -44.50%, annualized volatility 20.30%/20.31%,
+annualized turnover 208.19%, 43 quarterly rebalances. Full report:
+`reports/ValueComposite/` (gitignored scratch output, not committed).
+
+**IR vs. benchmark (mandatory) — FAIL, but the closest to zero of any
+trial in this loop.** Benchmark returns sourced from
+`local_lake.read_pit("processed", "market_ref_bars_1d_yahoo_adj",
+tickers=["SPY"])` (2649 aligned trading days, 2016-01-05→2026-07-20).
+`excess_return`: -48.23 cumulative percentage points below SPY over the
+full period. `active_return` (annualized): -1.27%/yr. Annualized
+tracking error: 10.71%. Information ratio (active return mean / active
+return std, annualized — same manual computation as every prior trial,
+no dedicated `information_ratio` helper in `backtester.engines.
+benchmark`): **-0.059**. Decisively better than every prior trial in
+this loop (Quality -0.26, Low-vol -0.41, Regime-gated low-vol -0.41,
+PEAD -0.48) — a near-flat information ratio rather than a decisive
+beta signature, though still technically a gate failure since it's
+negative, not zero or positive.
+
+**Cost sweep (mandatory) — PASS.** Sharpe/CAGR at 0/5/10/20 bps total
+cost: 0.6482/13.95%, 0.6445/13.86%, 0.6407/13.77%, 0.6332/13.60%
+(~2.3% relative Sharpe decay). Edge is not cost-sensitive, consistent
+with the quarterly rebalance cadence and lower turnover than the
+event-driven/technical trials in this loop.
+
+**Walk-forward robustness (mandatory) — BLOCKED.** Same confirmed lake
+API `read_bars`/`read_features` recency defect (see re-bisection above)
+would strand nearly every fold of the spec's rolling train=36mo/
+test=12mo scheme, so a full `WalkForwardEngine` run was skipped rather
+than reproduce an already-predictable near-total-failure result — same
+judgment call as all four prior trials. Deflated Sharpe / PBO
+consequently also BLOCKED / N/A.
 
 ## Regime evidence
 
-_Not yet gathered — filled in at REVIEW._
+Diagnostic, computed directly from `equity_curve.csv` vs. the same SPY
+series used for the IR gate (2026-07-22): COVID crash
+(2020-02-19→2020-03-23) strategy -43.89% vs SPY -33.72% (**-10.17pts**,
+underperformed decisively — the largest crisis-window gap of any trial
+in this loop, in either direction); 2022 bear market
+(2022-01-03→2022-10-12) strategy -18.37% vs SPY -24.50% (**+6.13pts**,
+outperformed). No GFC window in range (data starts 2016-01-04). Like
+PEAD, this is a mixed rather than consistently protective/exposed
+pattern, consistent with the spec's own pre-registered expectation that
+value's literature is genuinely mixed across cycles (no a-priori
+directional prediction was made). The COVID underperformance is
+notably large and worth flagging at REVIEW: a fast, liquidity-driven
+panic sell-off is exactly the kind of regime where "cheap on trailing
+fundamentals" can mean "cheap because the market is pricing in real
+distress risk" (value's classic value-trap failure mode), whereas the
+slower, valuation-driven 2022 decline rewarded the same tilt.
 
 ## Verdict & lessons
 
