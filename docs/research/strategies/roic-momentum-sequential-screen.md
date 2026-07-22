@@ -1,6 +1,14 @@
 # ROIC + momentum blend v2: sequential screen — research spec
 
-- **Status:** Draft. Spec written 2026-07-22, promoted from Ready rank 1.
+- **Status:** Implemented 2026-07-22. `strategies/roic_momentum_sequential_screen.py`
+  written on branch `worktree-roic-momentum-v2` (commit `1281f18`). Module
+  imports cleanly and a synthetic-data unit check confirms the sequential
+  exclusion behavior (missing roic/momentum, insufficient eligible/survivor
+  counts) and weight-cap enforcement, but the live smoke test against real
+  data did not complete this run -- the Lake API (`localhost:8000`) refused
+  the connection. Next stage: IMPLEMENT -> BACKTEST, which must re-probe
+  Lake API/MinIO reachability (per the loop's standing infra-preflight step)
+  before running the real backtest.
 - **Family:** Fundamental × technical combination (v2 of ROIC + momentum
   blend — same factor pair, different combination methodology)
 - **Promoted from backlog:** 2026-07-22, rank 1
@@ -106,6 +114,16 @@ if anything looks off.
   that the screened-subset size stays large enough across the sample
   (particularly early years / periods of higher `roic` nullness) to fill
   a meaningful top-quartile-of-survivors long book.
+- **Eligibility-count thresholds (chosen at IMPLEMENT, not pre-specified):**
+  `MIN_ELIGIBLE_FOR_SCREEN=16` before the ROIC median split (so both halves
+  have >= 8) and `MIN_SURVIVORS_FOR_QUARTILE=8` before the momentum
+  quartile split of survivors (so the top quartile has >= 2 names) --
+  chosen so a day only trades once both splits can produce a
+  non-degenerate result, analogous to v1's single `MIN_ELIGIBLE_FOR_QUARTILE
+  =8` threshold but doubled at the first gate since it's halved before the
+  second. Not yet checked against the full 2016-2026 sample for how many
+  days these thresholds leave the book empty, particularly in early years
+  or high-`roic`-nullness periods -- confirm at BACKTEST.
 
 ## Evaluation plan
 

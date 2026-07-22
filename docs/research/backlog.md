@@ -14,7 +14,11 @@ no intraday, futures, forex, options, or order flow.
 
 **ROIC + momentum blend v2: sequential screen** — promoted 2026-07-22
 from Ready rank 1. Spec written: `docs/research/strategies/
-roic-momentum-sequential-screen.md`. Stage: SPEC → IMPLEMENT next.
+roic-momentum-sequential-screen.md`. Code written:
+`strategies/roic_momentum_sequential_screen.py` on branch
+`worktree-roic-momentum-v2`. Stage: IMPLEMENT → BACKTEST next
+(re-probe Lake API/MinIO reachability first — Lake API was unreachable
+this run).
 
 ## Ready (ranked)
 
