@@ -12,13 +12,7 @@ no intraday, futures, forex, options, or order flow.
 
 ## WIP (max 1)
 
-Post-earnings-announcement drift (PEAD) — promoted 2026-07-21 from Ready
-rank 1. Spec: `docs/research/strategies/post-earnings-announcement-drift.md`.
-Research branch/worktree: `worktree-pead` (`strategies/post_earnings_announcement_drift.py`
-committed at `a6add37`). BACKTEST complete: IR -0.48 FAIL (most decisive yet),
-cost-sweep PASS (steepest decay yet, ~22% Sharpe 0bps→20bps), walk-forward
-BLOCKED (same lake API `end`-date defect, 4th consecutive trial). Next stage:
-BACKTEST → REVIEW.
+_Empty._
 
 ## Ready (ranked)
 
@@ -49,6 +43,15 @@ drag that causes the full-period IR failure). See `knowledge.md`'s Avoid
 list. Low priority for any future attempt on this family (faster/
 different regime signal) absent a reason to believe the structural
 ceiling doesn't apply.
+
+Explicitly avoided: top-quintile SUE (standardized unexpected earnings)
+long, fixed 60-trading-day hold, daily rebalance — tried as
+"Post-earnings-announcement drift", Archived 2026-07-21 (IR -0.48, most
+decisive gate failure of any trial so far; steepest cost-sweep decay and
+highest turnover of any trial; mixed, non-compensating regime evidence).
+See `knowledge.md`'s Avoid list. A differently-constructed event-driven
+signal (shorter hold, tighter SUE cutoff, or a short leg) is not excluded
+by this.
 
 ## Blocked
 

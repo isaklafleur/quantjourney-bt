@@ -1,6 +1,6 @@
 # Post-earnings-announcement drift (PEAD) — research spec
 
-- **Status:** WIP (BACKTEST complete, next stage REVIEW)
+- **Status:** Archived (REVIEW complete, 2026-07-21)
 - **Family:** Fundamental, event-driven
 - **Promoted from backlog:** 2026-07-21, rank 1
 
@@ -261,4 +261,43 @@ exploratory per the spec). Mixed, not uniformly protective or exposed:
 
 ## Verdict & lessons
 
-Not yet available — filled in at REVIEW.
+**Archive.** The mandatory IR-vs-benchmark gate failed more decisively
+than any prior trial in this loop (-0.48 vs. Quality composite's -0.26,
+Low-vol's -0.41, Regime-gated Low-vol's -0.41), and — unlike the
+low-volatility family, whose consistent crisis-window protection in both
+available windows motivated Improve — PEAD's regime evidence is mixed,
+not consistently compensating: it underperformed in the COVID crash
+(-3.56pts) and outperformed in the 2022 bear (+8.42pts). Per the spec's
+own pre-registration, PEAD's behavioral mechanism has no a-priori
+crisis-regime prediction to confirm or contradict, so this mixed result
+reads as noise rather than a signature worth building a gated variant
+around — there is no single, clear "protect in window X" finding the way
+the low-vol family had to motivate a specific next design. Combined with
+the steepest cost-sweep decay of any trial (~22% Sharpe decay 0→20bps,
+vs. every prior trial's <11%) and the highest turnover (702.59%
+annualized), the strategy's edge is both weak on a risk-adjusted,
+benchmark-relative basis and unusually fragile to real-world cost
+assumptions. No specific salvageable variant presents itself the way
+regime-gating did for low-vol, so Archive rather than Improve.
+
+Lessons distilled to `knowledge.md`:
+- A fixed-holding-window event strategy with a sparse weekly entry rate
+  (median 7/week here) is not the same as a sparsely-invested strategy:
+  overlapping cohorts from consecutive entry weeks kept this book ~95%
+  gross-invested across ~72-90 names on 99.96% of days — a broad,
+  market-like long book in practice, confirmed directly from
+  `weights.csv`, not assumed. Don't infer net exposure from entry-event
+  sparsity for any future fixed-hold event-driven design in this loop.
+- A behavioral (non-risk-based) mechanism's regime evidence can be
+  genuinely mixed (protective in one crisis, not in another) without
+  that being a bug or a modeling error — it just means the mixed result
+  carries little design signal, unlike a risk-based mechanism's
+  consistent-by-construction regime signature (contrast with the
+  low-volatility family).
+- Turnover-heavy event strategies can show *lower* tracking error than
+  calendar-rebalanced factor screens despite a decisively worse IR
+  (PEAD: 5.83% ann. TE vs. low-vol's ~11pts implied) precisely because a
+  near-continuously-invested, broadly diversified book is closer in
+  composition to the benchmark — don't use tracking-error magnitude
+  alone as a proxy for how much a strategy's exposure resembles the
+  benchmark's.

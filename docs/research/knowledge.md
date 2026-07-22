@@ -19,6 +19,9 @@ trial contradicts it, note the contradiction instead.
 - **A mandatory-gate failure (IR vs. benchmark) doesn't automatically mean a risk-based/structural hypothesis is wrong — check regime evidence before defaulting to Archive.** Low-volatility anomaly failed the full-period IR gate more decisively than Quality composite (-0.41 vs -0.26) yet showed genuine, real downside protection in both available crisis windows (COVID +3.09pts, 2022 bear +11.74pts vs SPY) — the mechanism works as the risk-based hypothesis predicts, it's just net negative over a sample dominated by a long bull stretch between crises. This is a qualitatively different failure mode from Quality composite (which showed no compensating regime evidence at all, since its OOS run never reached crisis-analysis) and justifies **Improve** (regime-gate the exposure) rather than Archive. Read the regime evidence, not just the gate's pass/fail, before choosing a verdict.
 - **A crisis-only regime gate can't fix a full-period IR failure whose real source is drag during the calm majority of the sample, not crisis-window exposure — check what fraction of the period the gate is even active before expecting it to move the IR gate.** Regime-gated low-volatility anomaly (SPY-200d-SMA gate, elevated ~17% of days) left the mandatory IR gate numerically unchanged from the ungated version (-0.41 both) despite the structural change, because the gate only ever gets a chance to help during that ~17% — it has no mechanism at all to address the other ~83% of (calm, bull-dominated) days where the ungated version's underperformance actually accumulates. Don't expect a defensive-only gate to rescue a full-period benchmark-relative gate failure unless the failure itself is concentrated in the windows the gate covers. (`trial-registry.md`, Regime-gated low-volatility anomaly REVIEW 2026-07-21)
 - **A binary trend-following regime gate (SPY vs. its 200-day SMA) is measurably too slow for fast crashes, though it tracks slow grinds well — confirmed by direct measurement, not assumption.** In the same trial, the gate was elevated on only 16/24 trading days of the 24-day COVID crash (didn't flip until day 6) vs. 153/196 days of the ~9-month 2022 bear market (flipped by day 13) — and this lag directly explains why the regime-gated version's crisis protection (COVID +1.87pts, 2022 bear +7.27pts vs SPY) came in below the always-on ungated version's (+3.09pts/+11.74pts) in both windows. A 200-day SMA gate trades a genuine reduction in bull-market drag for a real loss of fast-crash coverage — worth pre-registering and measuring directly (via the underlying trend-flag Series against the crisis date range) for any future strategy using this same `sctr_momentum_regime_gated.py`-style gate, rather than assuming the gate is protective just because it's designed to be.
+- **A fixed-holding-window event strategy with a sparse weekly entry rate is not the same as a sparsely-invested strategy — check net exposure directly from `weights.csv`, don't infer it from entry-event cadence.** PEAD's entry pool is genuinely sparse (median 7 qualifying announcements/week), but the fixed 60-trading-day hold means overlapping cohorts from consecutive entry weeks kept the book ~95% gross-invested across ~72-90 names on 99.96% of days — a broad, market-like long book in practice, not the "idle most other weeks" character the entry cadence alone would suggest. (`trial-registry.md`, Post-earnings-announcement drift REVIEW 2026-07-21)
+- **A behavioral (non-risk-based) mechanism's regime evidence can be genuinely mixed without that being a bug or a modeling error — it just carries little design signal, unlike a risk-based mechanism's consistent-by-construction regime signature.** PEAD underperformed in the COVID crash (-3.56pts) but outperformed in the 2022 bear (+8.42pts), with no a-priori crisis-regime prediction to confirm or contradict either way (contrast with the low-volatility family's consistent both-crisis protection, which motivated a specific regime-gated follow-up). A mixed result from a behavioral mechanism is noise, not a signature worth building a gated variant around.
+- **Turnover-heavy event strategies can show *lower* tracking error than calendar-rebalanced factor screens despite a decisively worse IR — don't use tracking-error magnitude alone as a proxy for how much a strategy's exposure resembles the benchmark's.** PEAD's 5.83% annualized tracking error is much lower than the low-vol trials' (~11pts implied) precisely because its near-continuously-invested, broadly diversified book (~95% gross exposure, 99.96% of days) is closer in composition to the benchmark — yet its IR (-0.48) is the most decisive gate failure of any trial so far, because the active-return drag is large relative to that smaller tracking error.
 
 ## Avoid list
 
@@ -47,6 +50,17 @@ spec they trace back to.
   signal, so a faster/different trend signal isn't expected to clear the
   gate either — treat a new attempt on this family as low-priority absent
   a reason to believe otherwise.
+- Post-earnings-announcement drift (PEAD): top-quintile SUE (standardized
+  unexpected earnings) long, fixed 60-trading-day hold, daily rebalance,
+  PIT S&P 500 — Archived 2026-07-21, failed the mandatory IR-vs-benchmark
+  gate more decisively than any prior trial (IR -0.48), with the steepest
+  cost-sweep decay (~22% Sharpe 0→20bps) and highest turnover (702.59%
+  annualized) of any trial, and mixed (non-compensating) regime evidence.
+  See `trial-registry.md` and
+  `docs/research/strategies/post-earnings-announcement-drift.md`. Does not
+  exclude a differently-constructed event-driven signal (e.g. a shorter
+  hold, a tighter SUE cutoff, or a short leg) — only this specific
+  quintile/60-day-hold/long-only construction.
 
 ## Regime evidence
 
@@ -92,3 +106,21 @@ just underdeliver on speed — it can't reach the actual source of the
 full-period underperformance at all, since it only ever acts during the
 ~17% of days it's active. Motivated Archive rather than another Improve
 iteration.
+
+**Post-earnings-announcement drift** (REVIEW 2026-07-21, same method,
+computed directly from `equity_curve.csv` vs. SPY): unlike either
+low-volatility trial, PEAD's regime evidence is mixed rather than
+consistently protective or exposed — COVID crash (2020-02-19→2020-03-23)
+-37.28% vs SPY -33.72% (**-3.56pts**, underperformed), 2022 bear market
+(2022-01-03→2022-10-12) -16.08% vs SPY -24.50% (**+8.42pts**,
+outperformed). The strategy held ~95% gross exposure across ~72 names
+throughout both windows (confirmed from `weights.csv`, not assumed) —
+so neither result is a being-in-cash effect; the COVID underperformance
+reflects full exposure to a market-wide panic with no defensive
+mechanism, while the 2022 outperformance more likely reflects which
+names' SUE-driven drift held up better during a slower, valuation-driven
+decline. Consistent with PEAD's behavioral (non-risk-based) mechanism
+having no a-priori crisis-regime prediction: the mixed result carries
+little design signal and motivated Archive rather than a regime-gated
+follow-up (contrast with the low-volatility family, whose consistent
+both-crisis protection did motivate one).
