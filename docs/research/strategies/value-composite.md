@@ -1,6 +1,6 @@
 # Value composite — research spec
 
-- **Status:** WIP (BACKTEST complete; next stage BACKTEST → REVIEW)
+- **Status:** Improve (REVIEW complete 2026-07-22; branch stays alive, not merged)
 - **Family:** Fundamental value
 - **Promoted from backlog:** 2026-07-21, rank 1
 - **Code:** `strategies/value_composite.py` on `worktree-value-composite`
@@ -200,4 +200,29 @@ slower, valuation-driven 2022 decline rewarded the same tilt.
 
 ## Verdict & lessons
 
-_Not yet decided — filled in at REVIEW._
+**Improve** (2026-07-22). The mandatory IR-vs-benchmark gate technically
+fails (-0.059) but is near-flat rather than a decisive beta signature —
+closest to zero of any trial in this loop (Quality -0.26, Low-vol -0.41,
+Regime-gated low-vol -0.41, PEAD -0.48) — and the cost-sweep gate passes
+with the mildest decay of any trial (~2.3%). Regime evidence is mixed
+(COVID -10.17pts, 2022 bear +6.13pts), but unlike PEAD's unpredicted
+mixed result, the COVID underperformance matches value's classic
+"value trap" failure mode: cheap-on-trailing-fundamentals names can be
+genuinely distressed, not mispriced, during a fast liquidity panic. That
+gives a specific, actionable hypothesis rather than noise, so rather than
+Archive this spawns a targeted follow-up idea to the Ready backlog:
+**Quality-screened value composite** — filter the same earnings-yield /
+book-to-market composite by a quality/profitability signal (e.g.
+`quality_features.gross_profitability` or ROIC) to exclude distressed
+names before ranking on value, aimed specifically at closing the
+COVID-window gap without giving up the near-zero full-period IR. Branch
+`worktree-value-composite` stays alive, not merged. Lessons distilled
+into `knowledge.md`: (1) an IR-gate FAIL isn't a single bucket — near-zero
+vs. decisively negative should be distinguished before defaulting to
+Archive; (2) mixed regime evidence carries real design signal when the
+underperforming window has a specific, literature-grounded mechanism and
+a concrete remedy, unlike PEAD's genuinely unpredicted mix; (3)
+`value_features.book_value_per_share`'s ~16.9% null rate is independent
+of `quality_features.gross_profitability`'s ~50-58% — another
+confirmation that coverage properties don't transfer across
+research-tier datasets by analogy.

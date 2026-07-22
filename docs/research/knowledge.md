@@ -22,6 +22,9 @@ trial contradicts it, note the contradiction instead.
 - **A fixed-holding-window event strategy with a sparse weekly entry rate is not the same as a sparsely-invested strategy — check net exposure directly from `weights.csv`, don't infer it from entry-event cadence.** PEAD's entry pool is genuinely sparse (median 7 qualifying announcements/week), but the fixed 60-trading-day hold means overlapping cohorts from consecutive entry weeks kept the book ~95% gross-invested across ~72-90 names on 99.96% of days — a broad, market-like long book in practice, not the "idle most other weeks" character the entry cadence alone would suggest. (`trial-registry.md`, Post-earnings-announcement drift REVIEW 2026-07-21)
 - **A behavioral (non-risk-based) mechanism's regime evidence can be genuinely mixed without that being a bug or a modeling error — it just carries little design signal, unlike a risk-based mechanism's consistent-by-construction regime signature.** PEAD underperformed in the COVID crash (-3.56pts) but outperformed in the 2022 bear (+8.42pts), with no a-priori crisis-regime prediction to confirm or contradict either way (contrast with the low-volatility family's consistent both-crisis protection, which motivated a specific regime-gated follow-up). A mixed result from a behavioral mechanism is noise, not a signature worth building a gated variant around.
 - **Turnover-heavy event strategies can show *lower* tracking error than calendar-rebalanced factor screens despite a decisively worse IR — don't use tracking-error magnitude alone as a proxy for how much a strategy's exposure resembles the benchmark's.** PEAD's 5.83% annualized tracking error is much lower than the low-vol trials' (~11pts implied) precisely because its near-continuously-invested, broadly diversified book (~95% gross exposure, 99.96% of days) is closer in composition to the benchmark — yet its IR (-0.48) is the most decisive gate failure of any trial so far, because the active-return drag is large relative to that smaller tracking error.
+- **An IR-gate "FAIL" is not a single bucket — a near-zero-but-negative IR with a mild cost-sweep decay is a qualitatively different result from a decisively negative one, and worth distinguishing at REVIEW rather than defaulting to Archive just because the sign is wrong.** Value composite's IR (-0.059) is an order of magnitude closer to zero than every prior trial (Quality -0.26, Low-vol -0.41, Regime-gated low-vol -0.41, PEAD -0.48), and its cost-sweep decay (~2.3%) is the mildest of any trial — together these read as "near-flat versus benchmark" rather than "beta dressed up as alpha," and motivated Improve rather than Archive despite the gate technically failing. (`trial-registry.md`, Value composite REVIEW 2026-07-22)
+- **Mixed (non-consistent) regime evidence doesn't automatically mean "no design signal," the way it did for PEAD — check whether the underperforming window has a specific, literature-grounded mechanism and a concrete remedy before concluding the mixed result is just noise.** Value composite's regime evidence is mixed like PEAD's (COVID -10.17pts, the largest crisis-window gap of any trial either direction; 2022 bear +6.13pts), but the COVID underperformance matches value's well-documented "value trap" failure mode (cheap-on-trailing-fundamentals can mean genuinely distressed, not mispriced, during a fast liquidity panic) — a specific, actionable hypothesis unlike PEAD's genuinely unpredicted mix. This motivated spawning a targeted follow-up (quality/profitability screen to exclude distress risk) rather than defaulting to Archive the way PEAD's unexplained mix did. (`trial-registry.md`, Value composite REVIEW 2026-07-22)
+- **`value_features.book_value_per_share`'s null rate (~16.9%) is far lower than `quality_features.gross_profitability`'s (~50-58%)** despite this loop's own spec initially guessing similarity by analogy between the two fundamental-composite datasets — reconfirms the standing lesson (`quality_features`' knowledge_time entry above) that null-rate and coverage properties don't transfer across research-tier datasets; always live-probe each new dataset rather than reasoning by analogy to a structurally similar one. (Value composite IMPLEMENT 2026-07-22)
 
 ## Avoid list
 
@@ -124,3 +127,21 @@ having no a-priori crisis-regime prediction: the mixed result carries
 little design signal and motivated Archive rather than a regime-gated
 follow-up (contrast with the low-volatility family, whose consistent
 both-crisis protection did motivate one).
+
+**Value composite** (REVIEW 2026-07-22, same method, computed directly
+from `equity_curve.csv` vs. SPY): also mixed, like PEAD — COVID crash
+(2020-02-19→2020-03-23) strategy -43.89% vs SPY -33.72% (**-10.17pts**,
+underperformed decisively, the largest crisis-window gap of any trial
+in this loop in either direction), 2022 bear market
+(2022-01-03→2022-10-12) strategy -18.37% vs SPY -24.50% (**+6.13pts**,
+outperformed). Unlike PEAD's unpredicted mix, the COVID underperformance
+matches value's own well-documented "value trap" failure mode: a fast,
+liquidity-driven panic is exactly the regime where "cheap on trailing
+fundamentals" can mean the market is correctly pricing in real distress
+risk rather than mispricing a healthy company — a specific, actionable
+explanation rather than noise. Combined with the mandatory IR gate's
+near-zero (-0.059, closest of any trial) result and the mildest
+cost-sweep decay of any trial, this motivated Improve: a follow-up idea
+("Quality-screened value composite") that filters the value composite by
+a quality/profitability signal to exclude distressed names, spawned to
+the Ready backlog rather than defaulting to Archive.
