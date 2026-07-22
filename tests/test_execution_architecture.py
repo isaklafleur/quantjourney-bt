@@ -542,6 +542,44 @@ def test_weight_cost_does_not_reenter_unchanged_position_after_gap() -> None:
     assert math.isfinite(float(result.total_cost.sum()))
 
 
+def test_weight_ledger_freezes_quantity_after_permanent_delisting() -> None:
+    """A weight frozen through a permanent price gap must not keep implying
+    phantom re-trades against a moving NAV: the ledger's own ``positions``
+    audit and the cost model's ``quantity_deltas`` must agree there is no
+    further trading once an instrument's raw price disappears for good, or
+    ``build_weight_ledger`` raises its reconciliation assertion.
+    """
+    dates = pd.date_range("2024-01-01", periods=5, freq="B")
+    weights = pd.DataFrame({"DELISTED": [0.5] * 5, "OTHER": [0.5] * 5}, index=dates)
+    prices = pd.DataFrame(
+        {
+            "DELISTED": [10.0, 10.0, np.nan, np.nan, np.nan],
+            "OTHER": [100.0, 110.0, 121.0, 133.1, 146.41],
+        },
+        index=dates,
+    )
+    portfolio_returns = pd.Series([0.0, 0.05, 0.05, 0.05, 0.05], index=dates)
+    flags = pd.Series(True, index=dates)
+
+    result, costs, position_changes = build_weight_ledger(
+        actual_weights=weights,
+        portfolio_returns=portfolio_returns,
+        prices=prices,
+        initial_capital=100_000.0,
+        rebalance_flags=flags,
+        cost_model=FixedBpsWeightCostModel(total_bps=10.0),
+        contract_spec_resolver=ContractSpec.equity,
+    )
+
+    pd.testing.assert_frame_equal(position_changes, costs.quantity_deltas, check_names=False)
+    frozen_quantity = result.positions["DELISTED"].iloc[1]
+    assert result.positions["DELISTED"].iloc[2:].tolist() == pytest.approx([frozen_quantity] * 3)
+    assert result.positions["DELISTED"].diff().iloc[2:].abs().sum() == pytest.approx(0.0)
+    # Book weight is left to drift with NAV rather than being synthetically
+    # topped up to stay pinned at the pre-delisting target weight.
+    assert result.book_weights["DELISTED"].iloc[-1] < result.book_weights["DELISTED"].iloc[1]
+
+
 def test_tax_aware_holding_age_tracks_short_increases_not_covers() -> None:
     dates = pd.date_range("2024-01-01", periods=3, freq="B")
     targets = pd.DataFrame({"PAIR": [-0.20, -0.50, -0.10]}, index=dates)

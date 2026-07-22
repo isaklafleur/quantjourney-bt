@@ -622,6 +622,28 @@ def build_weight_ledger(
                     quantity * price * spec.multiplier * spec.lot_size,
                     0.0,
                 )
+        # An instrument whose *raw* (non-ffilled) price permanently disappears
+        # (e.g. delisting) is untradeable from that point on: RebalanceEngine
+        # freezes its *weight* rather than trading it further, but recomputing
+        # quantity from that frozen weight against a growing/shrinking NAV
+        # each rebalance implies phantom buys/sells of an instrument with no
+        # market. The cost model already treats these bars as untradeable
+        # (``FixedBpsWeightCostModel`` masks quantity deltas to 0 wherever the
+        # raw price is NaN) — freeze the held quantity at its last
+        # raw-price-valid value here too, so both audit trails agree on "no
+        # further trading", and this position's book weight is left to drift
+        # with NAV rather than being synthetically topped up forever.
+        raw_notna = (
+            prices[instrument].reindex(actual_weights.index).to_numpy(dtype=float)
+        )
+        raw_notna = np.isfinite(raw_notna)
+        if raw_notna.any() and not raw_notna[-1]:
+            last_valid_idx = int(np.flatnonzero(raw_notna)[-1])
+            frozen_tail = np.zeros_like(raw_notna)
+            frozen_tail[last_valid_idx + 1 :] = True
+            quantity = np.where(frozen_tail, quantity[last_valid_idx], quantity)
+            exposure = np.where(frozen_tail, exposure[last_valid_idx], exposure)
+            value = np.where(frozen_tail, value[last_valid_idx], value)
         positions[instrument] = quantity
         exposure_values[instrument] = exposure
         position_values[instrument] = value
