@@ -270,4 +270,26 @@ as observed, without forcing it to match the prediction.
 
 ## Verdict & lessons
 
-_Filled in at REVIEW._
+**Verdict: Improve** (REVIEW 2026-07-23).
+
+The mandatory IR gate improved by an order of magnitude versus v1
+(-0.2205 → -0.0287), the closest to zero of any trial in this loop
+(surpassing Value composite's -0.059), with cost-sweep decay essentially
+unchanged (~14.24% vs. v1's ~14.1%). However, the spec's pre-registered
+directional prediction — that isolating the ROIC leg via a sequential
+screen would preserve/strengthen v1's consistent crisis protection
+(COVID +1.82pts, 2022 bear +4.51pts) — was **not confirmed**: v2's
+regime evidence weakened and flipped sign in COVID (-0.83pts vs. v1's
++1.82pts) and softened in the 2022 bear (+3.52pts vs. +4.51pts). The IR
+improvement and the regime-evidence weakening are best read as decoupled
+— the sequential screen most plausibly improved full-period risk-adjusted
+return via better stock selection within the ROIC-qualified pool, not
+via strengthened ROIC-linked defensiveness (see `knowledge.md`).
+
+Given the strong, concrete, monotonic IR-improvement trend across two
+methodology iterations (blend → half-split sequential screen), a
+further-tightened variant (top-third instead of median-split ROIC
+screen) is a specific, well-motivated next step to test whether IR can
+cross zero entirely — spawned as a new Ready-backlog idea ("ROIC +
+momentum blend v3: tighter ROIC screen"). Branch
+`worktree-roic-momentum-v2` stays alive, not merged.
