@@ -1,6 +1,7 @@
 # ROIC + momentum blend v3: tighter ROIC screen — research spec
 
-- **Status:** Draft (PROMOTE stage — spec only, no code yet)
+- **Status:** IMPLEMENT complete — code written and smoke-tested on
+  `worktree-roic-momentum-v3` (commit `9269782`). Next stage: BACKTEST.
 - **Family:** Fundamental × technical combination (v3 of ROIC + momentum
   blend — same sequential-screen methodology as v2, tighter ROIC cutoff)
 - **Promoted from backlog:** 2026-07-23, rank 1
@@ -82,19 +83,23 @@ own IMPLEMENT stage if anything looks off.
 - Missing-value handling: unchanged from v2 — a name missing `roic`
   cannot pass the screen (excluded, not defaulted), a name missing
   `ret_60d` cannot be ranked among survivors (excluded).
-- **Eligibility-count thresholds — flagged as an open design question for
-  IMPLEMENT, not decided here.** v2 used `MIN_ELIGIBLE_FOR_SCREEN=16`
-  (so a median split leaves >= 8 survivors) and
-  `MIN_SURVIVORS_FOR_QUARTILE=8` (so the top quartile of survivors has
-  >= 2 names). A top-third split of the same 16-name floor would leave
-  only ~5 survivors — below v2's own `MIN_SURVIVORS_FOR_QUARTILE=8`
-  threshold — so IMPLEMENT must either raise `MIN_ELIGIBLE_FOR_SCREEN`
-  (e.g. to ~24, so a third leaves >= 8) or lower
-  `MIN_SURVIVORS_FOR_QUARTILE` proportionally; whichever is chosen, log
-  the reasoning explicitly rather than silently reusing v2's numbers,
-  and confirm at BACKTEST how many days/rebalances the tighter screen
-  leaves the book empty relative to v2, particularly in early years or
-  periods of higher `roic` nullness.
+- **Eligibility-count thresholds (resolved at IMPLEMENT):** raised
+  `MIN_ELIGIBLE_FOR_SCREEN` from v2's 16 to **24**, so a top-third split
+  still leaves >= 8 survivors (matching v2's own post-split survivor
+  floor exactly, rather than compounding a second threshold change).
+  `MIN_SURVIVORS_FOR_QUARTILE` stays at v2's **8** unchanged, so the
+  second-stage logic is byte-for-byte identical to v2 — only the
+  first-stage cutoff and its supporting eligible-count floor changed.
+  Chose the spec's first suggested option (raise
+  `MIN_ELIGIBLE_FOR_SCREEN`) over lowering `MIN_SURVIVORS_FOR_QUARTILE`,
+  to keep the momentum-ranking step's own minimum-survivor bar consistent
+  across v2/v3 for a cleaner comparison. Smoke-tested on 40 tickers
+  (2024-01-02→present, `_smoke_roic_momentum_v3.py`): all 638 dates
+  produced a non-empty selection (up to 3 names/day at this small
+  sample size), all weights/signals finite, row sums <= the 0.10 cap —
+  confirm at BACKTEST how many days/rebalances the tighter screen leaves
+  the book empty on the full 709-ticker universe relative to v2,
+  particularly in early years or periods of higher `roic` nullness.
 
 ## Evaluation plan
 

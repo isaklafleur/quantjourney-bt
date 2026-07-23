@@ -14,10 +14,12 @@ no intraday, futures, forex, options, or order flow.
 
 **ROIC + momentum blend v3: tighter ROIC screen** — promoted 2026-07-23
 from Ready rank 1. Spec written
-(`docs/research/strategies/roic-momentum-v3-tighter-roic-screen.md`),
-research branch/worktree `worktree-roic-momentum-v3` created (base
-`167d602`, confirmed no code drift vs. `main` tip). Stage: SPEC →
-IMPLEMENT.
+(`docs/research/strategies/roic-momentum-v3-tighter-roic-screen.md`).
+Code written and smoke-tested on `worktree-roic-momentum-v3` (commit
+`9269782`): `strategies/roic_momentum_v3_tighter_roic_screen.py`, same
+sequential screen as v2 but a top-third ROIC cutoff
+(`MIN_ELIGIBLE_FOR_SCREEN` raised 16→24 to compensate, second-stage
+thresholds unchanged from v2). Stage: IMPLEMENT → BACKTEST.
 
 ## Ready (ranked)
 
