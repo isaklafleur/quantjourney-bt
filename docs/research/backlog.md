@@ -15,8 +15,9 @@ no intraday, futures, forex, options, or order flow.
 **Quality-screened value composite** — promoted 2026-07-23 from Ready
 rank 1. Spec: `docs/research/strategies/quality-screened-value-composite.md`.
 Research branch/worktree: `worktree-quality-screened-value-composite`
-(`.claude/worktrees/quality-screened-value-composite`). Stage: SPEC →
-IMPLEMENT.
+(`.claude/worktrees/quality-screened-value-composite`), commit `1509fe8`.
+Stage: IMPLEMENT → BACKTEST. Re-probe Lake API/MinIO reachability first
+per the standing infra-preflight rule.
 
 ## Ready (ranked)
 

@@ -1,8 +1,12 @@
 # Quality-screened value composite — research spec
 
-- **Status:** WIP (promoted 2026-07-23)
+- **Status:** WIP (promoted 2026-07-23) — IMPLEMENT complete, next stage BACKTEST
 - **Family:** Fundamental value × quality combination
 - **Promoted from backlog:** 2026-07-23, rank 1
+- **Code:** `strategies/quality_screened_value_composite.py` +
+  `strategies/_smoke_quality_screened_value_composite.py` (scratch smoke
+  test), branch/worktree `worktree-quality-screened-value-composite`
+  (`.claude/worktrees/quality-screened-value-composite`), commit `1509fe8`.
 
 ## Hypothesis
 
@@ -41,22 +45,18 @@ Verdict-worthy question this idea exists to answer).
   fallback to earnings-yield-only when null, same as Value composite).
   `knowledge_time` genuinely spread across history (2009-2026), not
   bulk-clustered near "now".
-- Quality/profitability screen signal — **open design choice, decide at
-  IMPLEMENT, do not assume here**:
-  - `quality_features.gross_profitability` — already live-probed
-    (Quality composite IMPLEMENT 2026-07-20): null on ~50-58% of rows.
-  - `roic_features.roic` — already live-probed (ROIC + momentum blend
-    IMPLEMENT 2026-07-22): null on ~53.75% of rows, chained through
-    `nopat`/`pretax_income`/`effective_tax_rate` nulling together.
-  - Both have comparably high (~50-58%) null rates — neither is a
-    clearly cleaner choice on coverage alone. Pick based on which
-    column's null pattern overlaps least with `value_features`' own
-    null pattern on a fresh joint probe at IMPLEMENT (a name null on
-    both the value inputs and the screen input can't be evaluated
-    either way and should just drop, but a screen signal that's
-    disproportionately null exactly where value data is present would
-    silently gut the eligible pool) — re-probe jointly, don't assume
-    independence from either factor's marginal null rate alone.
+- Quality/profitability screen signal — **resolved at IMPLEMENT
+  (2026-07-23) via a fresh joint-null probe against `value_features`,
+  PIT S&P 500, 709-ticker universe**: `roic_features.roic` (null
+  ~49.5% marginal) chosen over `quality_features.gross_profitability`
+  (null ~55.0% marginal) — comparable marginal null rates as the spec
+  anticipated, but their overlap with `value_features.book_value_per_share`-
+  populated names differs materially: 369 tickers have both `roic` and
+  `book_value_per_share` data vs. only 256 for `gross_profitability`, and
+  only 168 bvps-populated tickers lack `roic` entirely vs. 281 that lack
+  `gross_profitability`. `roic` preserves materially more of the
+  value-eligible pool, confirming the spec's concern that marginal null
+  rate alone doesn't predict joint coverage.
 - Universe: PIT S&P 500 (`backtester.local_lake.pit_sp500_ticker_universe`)
   — same choice as every prior trial in this loop.
 - Date range: 2016-01-01 to present, matching Value composite's own
@@ -72,23 +72,20 @@ Verdict-worthy question this idea exists to answer).
   research-tier-feature hook in `build_local_minio_bt_payload`,
   confirmed unchanged by every prior trial that needed one) and its
   cross-sectional z-score/nanmean value-factor combination unchanged.
-- New step: before ranking on the value composite score, drop names
-  below a quality/profitability threshold on the chosen screen signal
-  (e.g. below-median, mirroring the ROIC + momentum family's
-  screen-then-rank sequential-screen shape rather than a blended
-  three-factor z-score, to keep the value-vs-quality mechanisms
-  separable and the result interpretable) — exact cutoff is an
-  IMPLEMENT-time decision; log the reasoning in this spec's
-  Implementation notes once chosen, per this loop's standing discipline
-  for every prior open threshold decision.
-  Reconciling the screen fraction with `value_features`' own ~17% null
-  rate on `book_value_per_share` matters here: a below-median quality
-  cutoff before value-ranking will materially shrink the eligible pool
-  each rebalance (both null-rate haircuts compound), so IMPLEMENT should
-  check the resulting median pool size and eligibility count survives
-  `min_universe`-style sanity checks Value composite already used —
-  don't let a screen this aggressive collapse to a near-empty portfolio
-  on some rebalance dates without noticing.
+- New step (resolved at IMPLEMENT): before ranking on the value
+  composite score, drop names below a **median (top-half) ROIC**
+  threshold — matches the ROIC + momentum family's own v2 (median-split)
+  starting point rather than v3's tightened top-third, since this is a
+  new family's first trial, not an iteration on an already-passing gate.
+  `MIN_ELIGIBLE_FOR_SCREEN=16` (so the median split leaves >= 8
+  survivors) and `MIN_SURVIVORS_FOR_QUARTILE=8` (so the value-score top
+  quartile of survivors has >= 2 names) — same shape as
+  `roic_momentum_v3_tighter_roic_screen.py`'s thresholds. Verified via
+  the committed smoke test (150-ticker PIT S&P 500 subset, 2025-01-01 to
+  present): 386/386 trading days produced a nonempty selection (up to 12
+  names/day), so the screen-then-rank sequence does not collapse to an
+  empty portfolio in practice — the full 709-ticker BACKTEST run will
+  confirm this holds across the full 2016-2026 sample.
 - Rebalance policy (`qj-config-helper`): quarterly (`BQE`), matching
   Value composite, unless IMPLEMENT's cadence probe argues otherwise.
 - Position cap: equal-weight within the top quartile of the
