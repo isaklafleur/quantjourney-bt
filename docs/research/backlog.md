@@ -17,9 +17,14 @@ from Ready rank 1. Spec written: `docs/research/strategies/
 roic-momentum-sequential-screen.md`. Code written:
 `strategies/roic_momentum_sequential_screen.py` on branch
 `worktree-roic-momentum-v2`. Stage: IMPLEMENT → BACKTEST next
-(re-probe Lake API/MinIO reachability first — confirmed still down
-2026-07-22: Lake API connection refused on `localhost:8000`, and no
-`QJ_LOCAL_LAKE_*`/MinIO env vars configured at all in this environment).
+(re-probe Lake API reachability first — confirmed still down
+2026-07-22 (later run): connection refused on `localhost:8000/health`.
+MinIO/`local_lake` is now reachable as of this same run (`.env` has
+`QJ_LOCAL_LAKE_*` populated; a probe `pit_sp500_ticker_universe` read
+returned 499 tickers) but doesn't unblock this stage — the strategy's
+`roic_features`/`technical_features` reads go through
+`lake_api.read_features`, not `local_lake`. Only the Lake API needs
+re-probing next run).
 
 ## Ready (ranked)
 

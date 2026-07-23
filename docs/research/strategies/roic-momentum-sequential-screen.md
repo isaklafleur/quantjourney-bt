@@ -22,6 +22,30 @@
   are down; per the loop's hard rule this stage stops here without
   running the backtest or advancing to REVIEW. WIP remains at
   IMPLEMENT -> BACKTEST for the next run.
+- **2026-07-22 (still later run) infra-preflight re-probe: partial
+  recovery, still blocked overall.** `.env` now has `QJ_LOCAL_LAKE_*`
+  and `QJ_LAKE_API_KEY` populated (unlike the prior run, where none were
+  set) -- but these aren't auto-exported into the shell/process
+  environment by anything in `backtester/`, so a probe has to load
+  `.env` into `os.environ` itself before calling into `backtester`.
+  Doing that: `local_lake.pit_sp500_ticker_universe(start=..., end=...,
+  as_of=...)` **succeeded** (499 tickers returned) -- the MinIO path is
+  now genuinely reachable, a first for this WIP. The Lake API is still
+  down, though: a direct `urllib.request.urlopen("http://localhost:8000/health")`
+  still raised `ConnectionRefusedError: [Errno 61] Connection refused`
+  (`QJ_LAKE_API_URL` is unset in `.env`, so the `http://localhost:8000`
+  default applies, matching every prior probe). This still blocks
+  BACKTEST: `strategies/roic_momentum_sequential_screen.py`'s
+  `_momentum_panel`/`_roic_panel` fetch both `roic_features` and
+  `technical_features` via `backtester.lake_api.read_features` (checked
+  directly in the worktree's strategy file) -- MinIO/`local_lake` is only
+  wired up for `pit_sp500_ticker_universe`, not the research-tier feature
+  datasets this strategy actually needs, so MinIO being up doesn't
+  unblock this stage on its own. Per the loop's hard rule, stopped here
+  again without running the backtest. WIP remains at IMPLEMENT ->
+  BACKTEST; the next run should re-probe the Lake API specifically (its
+  `/health` endpoint) before anything else -- MinIO no longer needs
+  re-checking unless something else changes.
 - **Family:** Fundamental × technical combination (v2 of ROIC + momentum
   blend — same factor pair, different combination methodology)
 - **Promoted from backlog:** 2026-07-22, rank 1
