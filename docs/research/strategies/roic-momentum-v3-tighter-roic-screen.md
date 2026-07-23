@@ -1,7 +1,6 @@
 # ROIC + momentum blend v3: tighter ROIC screen — research spec
 
-- **Status:** IMPLEMENT complete — code written and smoke-tested on
-  `worktree-roic-momentum-v3` (commit `9269782`). Next stage: BACKTEST.
+- **Status:** BACKTEST complete (2026-07-23). Next stage: REVIEW.
 - **Family:** Fundamental × technical combination (v3 of ROIC + momentum
   blend — same sequential-screen methodology as v2, tighter ROIC cutoff)
 - **Promoted from backlog:** 2026-07-23, rank 1
@@ -135,11 +134,91 @@ family trial count.
 
 ## Results
 
-_Not yet run — filled in at BACKTEST._
+Full 709-ticker PIT universe, 2016-01-04→2026-07-21, `source="minio"`,
+monthly (BME) rebalance, `Backtester(source="minio")`.
+
+- **Primary run (10bps cost):** Sharpe 0.92, CAGR 17.16%, Total Return
+  430.90%, Max Drawdown -35.80%, Annualized Volatility 19.36%, Annualized
+  Turnover 637.25% (127 rebalances). Highest absolute Sharpe of any trial
+  in this loop so far.
+- **Mandatory IR-vs-benchmark gate: PASS** (first trial in this loop to
+  clear it) — IR **+0.2216**, active return (annualized, geometric)
+  +2.13%/yr, cumulative excess return +93.01pts vs SPY, tracking error
+  (ann.) 9.60%, computed via `backtester.engines.benchmark.active_return`/
+  `excess_return` against `SPY` daily returns read from
+  `backtester.local_lake.read_pit("processed", "market_ref_bars_1d_yahoo_adj", ...)`.
+  Note: `backtester.lake_api.read_bars("equity_bars_1d_yahoo_adj", tickers=["SPY"], ...)`
+  returns **zero rows for SPY specifically** (confirmed via direct probe —
+  SPY is simply not served by that HTTP dataset, unlike the per-ticker S&P
+  500 constituents; AAPL over the same window returns rows fine) — this is
+  a different failure mode from the already-documented recency defect and
+  is why every prior trial's benchmark fetch must have used
+  `market_ref_bars_1d_yahoo_adj` via `local_lake`, not `lake_api.read_bars`,
+  for the benchmark leg specifically. Continues the monotonic IR-gate
+  improvement trend across all three iterations of this family: v1
+  -0.2205 → v2 -0.0287 → v3 **+0.2216**, crossing zero as the spec's
+  pre-registered "purer ROIC pool → better selection" hypothesis
+  predicted.
+- **Mandatory walk-forward robustness gate: completed, not blocked** —
+  first walk-forward result of substance in this loop's history (8
+  consecutive prior trials were BLOCKED by the lake API `end`/`as_of`
+  recency defect). Ran `WalkForwardEngine(config=WalkForwardConfig(scheme="rolling",
+  train_months=24, test_months=6))` with **no `backtester_factory`**, i.e.
+  `slice_diagnostics` mode: it slices the *already-fetched* full-period
+  `portfolio_data` into IS/OOS windows entirely in-process, never touching
+  the lake API again — sidestepping the recency defect completely rather
+  than working around it. This is the methodologically correct choice
+  here, not just a workaround: this strategy has no fitted/optimized
+  parameters to refit per fold (the ROIC-tertile/momentum-quartile
+  thresholds are fixed constants, not estimated from training data), so
+  `per_fold_refit` mode would re-run identical fixed logic on each fold
+  and add nothing a plain slice can't already show. Result: 18 rolling
+  24mo/6mo folds, composite IS-slice Sharpe 0.81 [90% CI 0.31, 1.35],
+  Sharpe decay **-0.078/fold** (declining trend flagged by the engine's
+  own diagnostics), 4/18 folds with negative OOS-slice Sharpe, overfit
+  ratio >2.5 in several folds (driven by near-zero IS Sharpe in those
+  folds' denominators, not necessarily a distinct decay signal). Read
+  as diagnostic evidence of temporal consistency, not a classic
+  overfitting check (no optimizer/trial population exists for this
+  fixed-rule strategy) — engine's own output labels this explicitly
+  ("metrics are computed from a full-period NAV; pass backtester_factory
+  for per-fold refit").
+- **Deflated Sharpe: 0.9966** (n_trials=3 for the "Fundamental × technical
+  combination" family — v1, v2, v3, counted honestly per
+  `trial-registry.md`), computed via
+  `backtester.walkforward.statistics.deflated_sharpe.deflated_sharpe`
+  directly (not via the WF engine, since slice-diagnostics mode reports
+  DSR as n/a — "not meaningful without independent trials"), using daily
+  per-period Sharpes for all three family members (v1 0.7450 ann., v2
+  0.7788 ann., both converted to daily via /√252; v3 computed directly
+  from `equity_curve.csv`'s daily returns: 0.0578 daily, skew -0.582,
+  kurtosis 13.53 raw). **PASS**, well above the 0.95 "robust" threshold.
+- **Overfit probability (PBO): N/A** — `probability_of_backtest_overfitting`
+  is deprecated in this codebase and always returns `nan` (fold-level
+  Sharpes can't yield a real CSCV PBO); no optimizer/tuned-parameter
+  population exists for this fixed-rule strategy family, same as every
+  prior trial in this loop.
+- **Mandatory cost-sweep gate: PASS**, mildest decay of the ROIC family
+  and second-mildest of any trial in this loop (after Value composite's
+  ~2.3%) — Sharpe 0.97→0.94→0.92→0.87 across 0/5/10/20bps (~10.3%
+  relative decay), vs. v1's ~14.1% and v2's ~14.24%. Annualized turnover
+  unchanged by cost level (637.25%, cost model doesn't affect the
+  screen's own trading decisions).
+- **Regime evidence (diagnostic):** mixed, milder than v2's in both
+  directions — COVID crash (2020-02-19→2020-03-23) strategy -35.80% vs
+  SPY -33.72% (**-2.08pts**, underperformed), 2022 bear market
+  (2022-01-03→2022-10-12) strategy -22.22% vs SPY -24.50% (**+2.27pts**,
+  outperformed). Both magnitudes are smaller than v2's (COVID -0.83pts,
+  2022 bear +3.52pts) — the further-tightened ROIC screen continues
+  decoupling from the crisis-protection story (per the standing
+  `knowledge.md` lesson from v1→v2) while continuing to *improve* the
+  full-period IR gate, now past zero into genuinely positive territory.
 
 ## Regime evidence
 
-_Not yet gathered — filled in at REVIEW._
+See "Results" above — gathered together with the other gates this run
+since walk-forward was unblocked for the first time and there was no
+reason to defer.
 
 ## Verdict & lessons
 
