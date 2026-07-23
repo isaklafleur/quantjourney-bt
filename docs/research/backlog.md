@@ -12,19 +12,12 @@ no intraday, futures, forex, options, or order flow.
 
 ## WIP (max 1)
 
-**ROIC + momentum blend v3: tighter ROIC screen** — promoted 2026-07-23
-from Ready rank 1. Spec written and BACKTEST complete
-(`docs/research/strategies/roic-momentum-v3-tighter-roic-screen.md`, full
-results there). Code on `worktree-roic-momentum-v3` (commit `9269782`):
-`strategies/roic_momentum_v3_tighter_roic_screen.py`. Headline: mandatory
-IR-vs-benchmark gate **PASSED** for the first time in this loop (IR
-+0.2216, continuing the monotonic v1→v2→v3 trend -0.2205→-0.0287→+0.2216),
-walk-forward unblocked for the first time (slice_diagnostics mode, no lake
-API re-fetch needed — appropriate since this strategy has no fitted
-params to refit per fold), deflated Sharpe 0.9966 (n_trials=3), cost sweep
-PASS (~10.3% decay, mildest of the family), regime evidence mixed and
-milder than v2's (COVID -2.08pts, 2022 bear +2.27pts). Stage: BACKTEST →
-REVIEW.
+_Empty._ Cleared 2026-07-23: "ROIC + momentum blend v3: tighter ROIC
+screen" reached REVIEW with verdict **Ship** — this loop's first Ship.
+`strategies/roic_momentum_v3_tighter_roic_screen.py` merged to `main`
+and added to `release/public_artifacts.txt`. Full detail:
+`docs/research/strategies/roic-momentum-v3-tighter-roic-screen.md`,
+`trial-registry.md` (2026-07-23 04:35 row).
 
 ## Ready (ranked)
 

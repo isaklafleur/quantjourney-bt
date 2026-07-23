@@ -1,6 +1,7 @@
 # ROIC + momentum blend v3: tighter ROIC screen — research spec
 
-- **Status:** BACKTEST complete (2026-07-23). Next stage: REVIEW.
+- **Status:** REVIEW complete (2026-07-23). **Verdict: Ship.** Merged into
+  `main` as `strategies/roic_momentum_v3_tighter_roic_screen.py`.
 - **Family:** Fundamental × technical combination (v3 of ROIC + momentum
   blend — same sequential-screen methodology as v2, tighter ROIC cutoff)
 - **Promoted from backlog:** 2026-07-23, rank 1
@@ -222,4 +223,44 @@ reason to defer.
 
 ## Verdict & lessons
 
-_Not yet decided — filled in at REVIEW._
+**Ship** — the first trial in this loop's history to clear the mandatory
+IR-vs-benchmark gate (+0.2216), capping a monotonic three-iteration
+trend (v1 -0.2205 → v2 -0.0287 → v3 +0.2216) that confirms the
+pre-registered "purer ROIC pool → better selection" hypothesis. All
+quantifiable mandatory gates clear: IR PASS, deflated Sharpe PASS
+(0.9966, n_trials=3 honestly counted), cost-sweep PASS (mildest decay of
+the family, ~10.3%). PBO N/A (fixed-rule strategy, no tunable
+parameters — structurally low overfit risk).
+
+The walk-forward diagnostic's reported -0.078/fold decay trend and 4/18
+negative-Sharpe folds initially read like the "rolling Sharpe collapses
+in recent years" red flag `qj-report-analyst` warns about. Independently
+re-verified directly from `equity_curve.csv` via half-year Sharpe
+buckets rather than trusting the fold-decay summary at face value: the
+negative windows map exactly onto already-known adverse periods (2018H2
+-0.79, 2020H1 COVID ≈-0.02, 2022H1 bear -1.73), while the two most
+recent half-years (2025H2 1.81, 2026H1 2.23) are among the strongest of
+the entire 2016-2026 sample — the opposite of secular alpha decay. Since
+`slice_diagnostics` mode has no per-fold refit (appropriate here, as
+this fixed-rule strategy has no tunable parameters to overfit), a
+negative chronological trend coefficient can be dominated by a handful
+of known crisis windows rather than genuine decay — this is now a
+standing lesson in `knowledge.md`.
+
+Regime evidence continued decoupling from the IR trend, consistent with
+the standing v1→v2 lesson: COVID -2.08pts, 2022 bear +2.27pts, both
+milder than v2's, while the full-period IR kept improving past zero.
+This decoupling means the IR-gate pass should be read as "better stock
+selection within an increasingly ROIC-qualified pool," not as evidence
+of a strengthened risk-based/defensive mechanism — worth remembering if
+a future family member's IR ever regresses, since the crisis-protection
+story isn't what's carrying this result.
+
+Git action: merged `strategies/roic_momentum_v3_tighter_roic_screen.py`
+into `main`, added to `release/public_artifacts.txt` (alphabetical slot
+between `strategies/README.md` and `strategies/sctr_momentum_regime_gated.py`).
+Full test suite (202 passed) run before the merge commit. Branch
+`worktree-roic-momentum-v3` left parked (not merged as a branch, not
+deleted) — only the strategy file itself was merged, consistent with
+this loop's git workflow (research branches hold SPEC/IMPLEMENT/BACKTEST
+work; only the final artifact moves to `main` at Ship).
