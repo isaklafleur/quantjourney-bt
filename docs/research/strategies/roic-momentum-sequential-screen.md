@@ -46,6 +46,18 @@
   BACKTEST; the next run should re-probe the Lake API specifically (its
   `/health` endpoint) before anything else -- MinIO no longer needs
   re-checking unless something else changes.
+- **2026-07-22 (yet another run) infra-preflight re-probe: still blocked,
+  Lake API only.** Per the prior run's own note, only the Lake API needed
+  re-checking (MinIO/`local_lake` confirmed reachable last run and
+  nothing in this environment would have changed that). Direct probe
+  (`urllib.request.urlopen("http://localhost:8000/health", timeout=5)`,
+  no `QJ_LAKE_API_URL` override present) again raised
+  `ConnectionRefusedError: [Errno 61] Connection refused` — the 3rd
+  consecutive run finding the Lake API down. Per the loop's hard rule,
+  stopped here without running the backtest, writing a registry row, or
+  advancing to REVIEW. WIP remains at IMPLEMENT -> BACKTEST; the next
+  run should re-probe the Lake API's `/health` endpoint again before
+  anything else.
 - **Family:** Fundamental × technical combination (v2 of ROIC + momentum
   blend — same factor pair, different combination methodology)
 - **Promoted from backlog:** 2026-07-22, rank 1
