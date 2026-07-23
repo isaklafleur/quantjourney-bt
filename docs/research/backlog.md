@@ -16,15 +16,14 @@ no intraday, futures, forex, options, or order flow.
 from Ready rank 1. Spec written: `docs/research/strategies/
 roic-momentum-sequential-screen.md`. Code written:
 `strategies/roic_momentum_sequential_screen.py` on branch
-`worktree-roic-momentum-v2`. Stage: IMPLEMENT → BACKTEST next
-(re-probe Lake API reachability first — confirmed still down
-2026-07-22 (yet another run): connection refused on
-`localhost:8000/health`, 3rd consecutive run finding it down. MinIO/
-`local_lake` remains reachable (confirmed the prior run; not
-re-checked this run, no reason to expect regression) but doesn't
-unblock this stage on its own — the strategy's `roic_features`/
-`technical_features` reads go through `lake_api.read_features`, not
-`local_lake`. Only the Lake API needs re-probing next run).
+`worktree-roic-momentum-v2`. BACKTEST completed 2026-07-22 23:30 (Lake
+API back up after 4 consecutive blocked runs): full 709-ticker
+universe, IR -0.0287 (FAIL, closest to zero of any trial so far),
+cost-sweep PASS (~14.24% decay), walk-forward BLOCKED (standing lake
+API recency defect). Regime evidence mixed (COVID -0.83pts, 2022 bear
++3.52pts) — does not confirm the spec's pre-registered prediction.
+Stage: BACKTEST → REVIEW next (write trial-registry.md row, distill
+knowledge.md lessons, decide verdict, clear WIP slot).
 
 ## Ready (ranked)
 

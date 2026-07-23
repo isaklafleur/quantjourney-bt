@@ -1,14 +1,13 @@
 # ROIC + momentum blend v2: sequential screen — research spec
 
-- **Status:** Implemented 2026-07-22. `strategies/roic_momentum_sequential_screen.py`
-  written on branch `worktree-roic-momentum-v2` (commit `1281f18`). Module
-  imports cleanly and a synthetic-data unit check confirms the sequential
-  exclusion behavior (missing roic/momentum, insufficient eligible/survivor
-  counts) and weight-cap enforcement, but the live smoke test against real
-  data did not complete this run -- the Lake API (`localhost:8000`) refused
-  the connection. Next stage: IMPLEMENT -> BACKTEST, which must re-probe
-  Lake API/MinIO reachability (per the loop's standing infra-preflight step)
-  before running the real backtest.
+- **Status:** BACKTEST completed 2026-07-22 (23:30, Lake API back up after
+  4 consecutive blocked runs). Full 709-ticker-universe result: IR -0.0287
+  (FAIL, but closest to zero of any trial in this loop), cost-sweep PASS
+  (~14.24% decay), walk-forward BLOCKED (standing lake API recency
+  defect, 8th consecutive trial). Regime evidence mixed (COVID -0.83pts,
+  2022 bear +3.52pts), not confirming the spec's pre-registered
+  prediction of preserved/strengthened crisis protection. See Results/
+  Regime evidence sections below. Next stage: BACKTEST -> REVIEW.
 - **2026-07-22 (later run) infra-preflight re-probe: still blocked.**
   Direct socket-level check (`python3 -c "urllib.request.urlopen('http://localhost:8000/health')"`,
   not just `curl`, since `curl`/`git -C`/`env` were all denied approval in
@@ -207,11 +206,67 @@ universe note above (full 709-ticker, no delisted-name exclusion needed).
 
 ## Results
 
-_Filled in at BACKTEST._
+**BACKTEST completed 2026-07-22.** Infra preflight: Lake API `/health`
+returned 200 (`{"status":"ok"}`, direct `urllib` probe) — back up after 4
+consecutive blocked runs (last confirmed down 2026-07-22 22:47); MinIO
+`local_lake` reachable per the prior run's confirmation, not re-checked
+(no reason to expect regression). Re-bisected the standing
+`lake_api.read_bars` `end`-date recency defect first: unchanged
+(`end=2020-01-01`/`2023-06-15`/`2026-07-03` all 0 rows,
+`end=2026-07-22` returns 2650 rows), 8th consecutive trial confirming it.
+
+Ran the full-period backtest via a scratch driver script
+(`_backtest_roic_momentum_v2.py`, deleted after) importing
+`RoicMomentumSequentialScreen` from `worktree-roic-momentum-v2` via
+`sys.path` insertion, from the main repo root with the main `.venv`,
+using the **full 709-ticker PIT universe** (no delisted-name exclusion
+needed — confirmed the shared-engine ledger fix, commit `a44a703`,
+works: the run still logs the frozen-weight `UserWarning` for the same
+12 known-delisted tickers but completes without the
+`AssertionError: weight-mode position changes do not reconcile with
+costed quantity deltas` crash that forced v1's workaround).
+
+Sharpe 0.7234, Total Return 316.40%, Max DD -35.23%, Ann. Vol 18.33%,
+127 rebalances (avg 20.9 days between).
+
+Mandatory IR-vs-benchmark gate: **FAIL, but the closest to zero of any
+trial in this loop** — IR -0.0287, active return -0.40%/yr, ann.
+tracking error 8.64%, cumulative excess -15.36pts vs SPY over 2650
+aligned trading days (2016-01-04 → 2026-07-20), computed via the same
+manual active-return-mean/std method as every prior trial
+(`market_ref_bars_1d_yahoo_adj`'s `close` column, not `adj_close`).
+Nearly an order of magnitude closer to zero than v1's -0.2205, and
+closer than Value composite's previous best (-0.059).
+
+Mandatory cost-sweep gate: **PASS** — Sharpe 0.7788→0.7511→0.7234→0.6679
+across 0/5/10/20bps (~14.24% relative decay, via a separate lean
+scratch script `_cost_sweep_roic_momentum_v2.py`, deleted after,
+`skip_analysis=True`), essentially identical to v1's ~14.1% decay —
+the sequential screen's narrower survivor pool per rebalance didn't
+meaningfully change turnover/cost sensitivity from the blended version.
+
+Mandatory walk-forward gate: **BLOCKED** — same confirmed lake API
+`read_bars`/`read_features` `end`/`as_of` recency defect (re-bisected
+above), 8th consecutive trial hitting it; DSR/PBO consequently also
+BLOCKED/N/A. `n_trials=2` for the "Fundamental × technical combination"
+family, per the spec's evaluation plan.
 
 ## Regime evidence
 
-_Filled in at REVIEW._
+Computed directly from `equity_curve.csv` vs the same
+`market_ref_bars_1d_yahoo_adj` SPY series used for the IR gate: COVID
+crash (2020-02-19→2020-03-23) strategy -34.23% vs SPY -33.40%
+(**-0.83pts**, mildly underperformed), 2022 bear market
+(2022-01-03→2022-10-12) strategy -20.54% vs SPY -24.06% (**+3.52pts**,
+outperformed).
+
+This does **not** confirm the spec's pre-registered directional
+prediction: the hypothesis was that isolating the ROIC leg via a
+sequential screen would preserve or strengthen v1's consistent
+both-crisis protection (COVID +1.82pts, 2022 bear +4.51pts). Instead,
+v2's regime evidence is now mixed — COVID protection flipped to a mild
+loss, and 2022 protection weakened from +4.51pts to +3.52pts. Recorded
+as observed, without forcing it to match the prediction.
 
 ## Verdict & lessons
 
