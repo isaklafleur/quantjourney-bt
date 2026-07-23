@@ -12,20 +12,18 @@ no intraday, futures, forex, options, or order flow.
 
 ## WIP (max 1)
 
-_Empty._ Cleared 2026-07-23: "ROIC + momentum blend v3: tighter ROIC
-screen" reached REVIEW with verdict **Ship** — this loop's first Ship.
-`strategies/roic_momentum_v3_tighter_roic_screen.py` merged to `main`
-and added to `release/public_artifacts.txt`. Full detail:
-`docs/research/strategies/roic-momentum-v3-tighter-roic-screen.md`,
-`trial-registry.md` (2026-07-23 04:35 row).
+**Quality-screened value composite** — promoted 2026-07-23 from Ready
+rank 1. Spec: `docs/research/strategies/quality-screened-value-composite.md`.
+Research branch/worktree: `worktree-quality-screened-value-composite`
+(`.claude/worktrees/quality-screened-value-composite`). Stage: SPEC →
+IMPLEMENT.
 
 ## Ready (ranked)
 
 | Rank | Idea | Family | Lineage | Orig. | Simpl. | Robust. | Overfit | Impl. | Notes |
 |------|------|--------|---------|-------|--------|---------|---------|-------|-------|
-| 1 | Quality-screened value composite: same earnings-yield/book-to-market composite as Value composite, filtered by a quality/profitability signal (`quality_features.gross_profitability` or `roic_features.roic`) to exclude distressed "value trap" names before ranking on value | Fundamental value × quality combination | Direct follow-up to Value composite (Improve, REVIEW 2026-07-22) — targets its identified COVID-window value-trap underperformance (-10.17pts, largest crisis-window gap of any trial) with a specific, literature-grounded fix rather than a vague retry | 3 | 3 | 3 | 3 | 4 | Both `value_features` and `quality_features`/`roic_features` already live-probed and available (see `strategies/value_composite.py`/`quality_composite.py`). Screen threshold and which quality signal to use are open design choices with real researcher degrees of freedom, hence overfit-risk parallel to ROIC+momentum's. Goal is to close the COVID-window gap while preserving Value composite's near-zero full-period IR (-0.059, closest of any trial) and its low cost-sweep decay — not to chase a different mechanism. |
-| 2 | Cross-sectional RSI/Bollinger mean-reversion: rank by how oversold (`rsi_14` low + close near `bb_low`), short holding period | Technical, contrarian | Classic technical reversion; distinct from this repo's existing W03/W21 examples (cross-sectional universe selection vs. a single fixed basket) | 2 | 5 | 2 | 2 | 5 | `rsi_14`/`bb_low`/`bb_mid`/`bb_high` all directly in `technical_features`. Short-horizon technical reversion is notoriously fragile out-of-sample and highly cost-sensitive — mandatory cost-sweep gate, and a quality/eligibility filter is worth considering to avoid buying names that are oversold for a real fundamental reason ("falling knives"), though that's a design decision for SPEC, not decided here. |
-| 3 | OBV-confirmed breakout: N-day price high + rising `obv` as trend-continuation confirmation | Technical, breakout / trend-initiation | Classic technical breakout + volume-confirmation heuristic; no direct IMQuantFund analog found | 3 | 3 | 2 | 2 | 4 | `obv`/`volume_sma_20` in `technical_features`; "N-day high" derived directly from the price panel. Breakout lookback window and confirmation threshold are exactly the kind of parameters prone to curve-fitting — lowest overfit-risk score in the batch alongside #4 (now #5). Likely turnover-heavy around breakout attempts. |
+| 1 | Cross-sectional RSI/Bollinger mean-reversion: rank by how oversold (`rsi_14` low + close near `bb_low`), short holding period | Technical, contrarian | Classic technical reversion; distinct from this repo's existing W03/W21 examples (cross-sectional universe selection vs. a single fixed basket) | 2 | 5 | 2 | 2 | 5 | `rsi_14`/`bb_low`/`bb_mid`/`bb_high` all directly in `technical_features`. Short-horizon technical reversion is notoriously fragile out-of-sample and highly cost-sensitive — mandatory cost-sweep gate, and a quality/eligibility filter is worth considering to avoid buying names that are oversold for a real fundamental reason ("falling knives"), though that's a design decision for SPEC, not decided here. |
+| 2 | OBV-confirmed breakout: N-day price high + rising `obv` as trend-continuation confirmation | Technical, breakout / trend-initiation | Classic technical breakout + volume-confirmation heuristic; no direct IMQuantFund analog found | 3 | 3 | 2 | 2 | 4 | `obv`/`volume_sma_20` in `technical_features`; "N-day high" derived directly from the price panel. Breakout lookback window and confirmation threshold are exactly the kind of parameters prone to curve-fitting — lowest overfit-risk score in the batch alongside #4 (now #5). Likely turnover-heavy around breakout attempts. |
 
 Explicitly avoided: pure `sctr_features`/`rank`-based selection without a genuinely
 different structural twist — `strategies/sctr_momentum_regime_gated.py` already

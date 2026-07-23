@@ -121,6 +121,7 @@ sdist docs/research/strategies/_TEMPLATE.md
 sdist docs/research/strategies/low-volatility-anomaly.md
 sdist docs/research/strategies/post-earnings-announcement-drift.md
 sdist docs/research/strategies/quality-composite.md
+sdist docs/research/strategies/quality-screened-value-composite.md
 sdist docs/research/strategies/regime-gated-low-volatility-anomaly.md
 sdist docs/research/strategies/roic-momentum-blend.md
 sdist docs/research/strategies/roic-momentum-sequential-screen.md
